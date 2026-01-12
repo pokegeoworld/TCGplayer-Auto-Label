@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-import io, re, base64
+import io, re, base64, time
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (UNCHANGED STABLE LAYOUT) ---
+# --- 3. STYLING (SIDE-BY-SIDE BUTTONS & STABLE UI) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -45,7 +45,7 @@ st.markdown("""
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    can.setFont("Helvetica-Bold", 14) 
+    can.setFont("Helvetica-Bold", 14) # 14pt Address
     y = 5.7 * inch
     can.drawString(0.25*inch, y, data['buyer_name']); y -= 0.22*inch
     can.drawString(0.25*inch, y, data['address']); y -= 0.22*inch
@@ -92,19 +92,23 @@ def extract_tcg_data(uploaded_file):
         return data, items
     except: return None, None
 
-# --- 6. AUTHENTICATION (SIDE-BY-SIDE BUTTONS FIXED) ---
+# --- 6. AUTHENTICATION (GLITCH-FREE HANDSHAKE) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    u_email = st.sidebar.text_input("Email")
-    u_pass = st.sidebar.text_input("Password", type="password")
-    # THE FIX: Columns for horizontal button layout
+    u_email = st.sidebar.text_input("Email", key="login_email")
+    u_pass = st.sidebar.text_input("Password", type="password", key="login_pass")
     l_col, r_col = st.sidebar.columns(2)
+    
     if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if res.user: st.session_state.user = res.user; st.rerun() 
+            if res.user:
+                st.session_state.user = res.user
+                time.sleep(0.5) # Handshake delay to allow token storage
+                st.rerun() 
         except: st.sidebar.error("Login Failed.")
+            
     if r_col.button("Sign Up"):
         try:
             supabase.auth.sign_up({"email": u_email, "password": u_pass})
@@ -128,7 +132,8 @@ if profile.get('tier') == 'New':
     colA, colB = st.columns(2)
     with colA:
         st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
-        if st.button("Activate Free Trial"): supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
+        if st.button("Activate Free Trial"):
+            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
