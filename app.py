@@ -45,38 +45,3 @@ def create_label_pdf(items):
     can.drawString(x_offset, y_offset, "TCGplayer Label")
     y_offset -= 0.4*inch
     can.setFont("Helvetica", 10)
-    for qty, name, set_name in items:
-        if y_offset < 0.5*inch:
-            can.showPage()
-            y_offset = 5.75*inch
-            can.setFont("Helvetica", 10)
-        can.drawString(x_offset, y_offset, f"[{qty}x] {name} - {set_name}")
-        y_offset -= line_height
-    can.save()
-    packet.seek(0)
-    return packet
-
-# --- 4. AUTHENTICATION LOGIC ---
-if "user" not in st.session_state:
-    st.sidebar.title("Login / Signup")
-    
-    with st.sidebar.form("auth_form"):
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
-        
-        # Create two columns for buttons inside the form
-        col1, col2 = st.columns(2)
-        login_submitted = col1.form_submit_button("Log In")
-        signup_submitted = col2.form_submit_button("Sign Up")
-
-    if login_submitted:
-        try:
-            res = supabase.auth.sign_in_with_password({"email": email, "password": password})
-            st.session_state.user = res.user
-            st.rerun()
-        except Exception:
-            st.sidebar.error("Invalid email or password.")
-            
-    if signup_submitted:
-        try:
-            res = supabase.auth.
