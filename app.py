@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-import io, re
+import io, re, base64
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (68PX TITLE & 450PX SIDEBAR) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
@@ -37,7 +37,6 @@ st.markdown("""
 # --- 4. FUNCTIONS ---
 def get_user_profile(user_id):
     try:
-        # We use .single() to ensure we only get the specific logged-in user's data
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
         return res.data
     except: return None
@@ -45,7 +44,12 @@ def get_user_profile(user_id):
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
-    return re.findall(r"(\d+)\s+(.*?)\s+\[(.*?)\]", text)
+    # Extract items
+    items = re.findall(r"(\d+)\s+(.*?)\s+\[(.*?)\]", text)
+    # Extract Order Number (Looking for Order #: followed by digits)
+    order_match = re.search(r"Order\s*#:\s*(\d+)", text)
+    order_no = order_match.group(1) if order_match else "Unknown"
+    return items, order_no
 
 def create_label_pdf(items):
     packet = io.BytesIO()
@@ -54,13 +58,29 @@ def create_label_pdf(items):
     can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
     y -= 0.5*inch; can.setFont("Helvetica", 11)
     for qty, name, set_name in items:
-        if y < 0.5*inch:
+        if y < 0.8*inch:
             can.showPage(); y = 5.75*inch; can.setFont("Helvetica", 11)
         can.drawString(x, y, f"[{qty}x] {name} - {set_name}"); y -= lh
+    
+    can.setFont("Helvetica-Oblique", 8); can.setStrokeColorRGB(0.8, 0.8, 0.8)
+    can.line(0.25*inch, 0.5*inch, 3.75*inch, 0.5*inch)
+    can.drawString(0.25*inch, 0.35*inch, "Return: 36 Michael Anthony ln, Depew NY 14043")
     can.save(); packet.seek(0)
     return packet
 
-# --- 5. AUTHENTICATION (SIDE-BY-SIDE BUTTONS) ---
+def auto_download(pdf_bytes, filename):
+    b64 = base64.b64encode(pdf_bytes.read()).decode()
+    dl_link = f"""
+    <script>
+    var link = document.createElement('a');
+    link.href = 'data:application/pdf;base64,{b64}';
+    link.download = '{filename}';
+    link.click();
+    </script>
+    """
+    st.components.v1.html(dl_link, height=0)
+
+# --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
@@ -69,21 +89,15 @@ if "user" not in st.session_state:
         e = st.text_input("Email")
         p = st.text_input("Password", type="password")
         col1, col2 = st.columns(2)
-        login_btn = col1.form_submit_button("Log In")
-        signup_btn = col2.form_submit_button("Sign Up")
-
-        if login_btn:
+        if col1.form_submit_button("Log In"):
+            st.session_state.clear()
             try:
-                # Clear any leftover state from previous attempts before logging in
-                st.session_state.clear()
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
                 if res.user:
                     st.session_state.user = res.user
                     st.rerun()
-            except: 
-                st.error("Login failed. Check your credentials.")
-        
-        if signup_btn:
+            except: st.error("Login failed.")
+        if col2.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
                 st.success("Success! Please Log In.")
@@ -91,44 +105,44 @@ if "user" not in st.session_state:
     st.stop()
 
 # --- 6. MAIN DASHBOARD ---
-# Double-check the user object exists in the state
-if not st.session_state.get("user"):
-    st.session_state.clear()
-    st.rerun()
-
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# Profile Sync Logic (Ensures 10 credits for new accounts)
 if not profile:
     try:
         supabase.table("profiles").insert({"id": user.id, "credits": 10}).execute()
         profile = get_user_profile(user.id)
-    except Exception as err:
-        st.error("Session sync error. Please Log Out and try again.")
-        st.stop()
+    except:
+        st.error("Session sync error."); st.stop()
 
 st.sidebar.write(f"Logged in: **{user.email}**")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
 if st.sidebar.button("Log Out"):
-    # Security: Wipe the session state entirely on logout
     st.session_state.clear()
-    # Sign out from Supabase as well
     supabase.auth.sign_out()
     st.rerun()
 
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
 
-file = st.file_uploader("Upload PDF", type="pdf")
-if file and st.button("Generate 4x6 Labels"):
+uploaded_file = st.file_uploader("Upload TCGplayer PDF to Auto-Download Label", type="pdf")
+
+if uploaded_file:
     if profile['credits'] > 0:
-        items = extract_tcg_data(file)
+        items, order_no = extract_tcg_data(uploaded_file)
         if items:
-            pdf = create_label_pdf(items)
+            pdf_result = create_label_pdf(items)
+            filename = f"TCGplayer_{order_no}.pdf"
+            
+            # Deduct credit
             new_c = profile['credits'] - 1
-            # Secure update restricted to the logged-in user's ID
             supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
-            st.success("Labels Generated!"); st.download_button("📥 Download", pdf, "Labels.pdf")
-        else: st.error("No items found.")
-    else: st.error("Out of credits.")
+            
+            # Trigger Auto Download
+            auto_download(pdf_result, filename)
+            st.success(f"Downloading {filename}...")
+            st.info("Check your browser downloads folder.")
+        else:
+            st.error("No item data found in PDF.")
+    else:
+        st.error("Out of credits.")
