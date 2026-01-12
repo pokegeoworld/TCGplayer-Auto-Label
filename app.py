@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (RESTORED HIGH-IMPACT LAYOUT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -46,7 +46,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE MASTER PDF CREATOR (18PT BOLD LAYOUT) ---
+# --- 4. THE MASTER PDF CREATOR (18PT BOLD ADDRESS) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -55,17 +55,14 @@ def create_label_pdf(data, items):
     c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
     c.drawString(0.5 * inch, height - 1.30 * inch, data['address'])
     c.drawString(0.5 * inch, height - 1.60 * inch, data['city_state_zip'])
-    c.setLineWidth(2)
-    c.line(0.5 * inch, height - 1.9 * inch, 7.5 * inch, height - 1.9 * inch)
-    c.setFont("Helvetica", 11)
-    y_pos = height - 2.2 * inch
+    c.setLineWidth(2); c.line(0.5 * inch, height - 1.9 * inch, 7.5 * inch, height - 1.9 * inch)
+    c.setFont("Helvetica", 11); y_pos = height - 2.2 * inch
     c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
     c.drawString(0.5 * inch, y_pos - 0.22*inch, f"Shipping Method: {data['method']}")
     c.drawString(0.5 * inch, y_pos - 0.44*inch, f"Buyer Name: {data['buyer_name']}")
     c.drawString(0.5 * inch, y_pos - 0.66*inch, f"Seller Name: {data['seller']}")
     c.drawString(0.5 * inch, y_pos - 0.88*inch, f"Order Number: {data['order_no']}")
-    y_pos -= 1.3 * inch
-    c.setFont("Helvetica-Bold", 12)
+    y_pos -= 1.3 * inch; c.setFont("Helvetica-Bold", 12)
     c.drawString(0.5 * inch, y_pos, "Qty"); c.drawString(1.0 * inch, y_pos, "Description")
     c.drawString(6.6 * inch, y_pos, "Price"); c.drawString(7.2 * inch, y_pos, "Total")
     y_pos -= 0.1 * inch; c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos); y_pos -= 0.25 * inch
@@ -124,25 +121,26 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 7. SIDEBAR ALWAYS-ON (FIXED) ---
+# --- 7. DATABASE HANDSHAKE (REINFORCED) ---
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
+# Default for brand new users: Tier 'None' and 0 Credits
 if not profile:
-    supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
-    profile = {"id": user.id, "credits": 5, "tier": "New"}
+    supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
+    profile = {"id": user.id, "credits": 0, "tier": "None"}
 
-# THE SIDEBAR IS NOW INDEPENDENT OF THE PRICING GATE
 st.sidebar.title("🎴 Account Controls")
 st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
 st.sidebar.write(f"Current Tier: **{profile['tier']}**")
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Billing Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
-if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 8. PRICING GATE (MAIN PAGE ONLY) ---
-if profile.get('tier') == 'New':
+# --- 8. SMART PRICING GATE (NEW USER / NO CREDITS) ---
+# Only show plan options if they have 0 credits AND no active plan tier
+if profile.get('credits') == 0 and profile.get('tier') == 'None':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
