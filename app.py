@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (SURGICAL LAYOUT & MASSIVE FONTS) ---
+# --- 3. STYLING (SURGICAL BUTTON ALIGNMENT & MASSIVE TEXT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -30,7 +30,7 @@ st.markdown("""
         margin: 45px auto 25px auto; font-size: 35px !important; 
     }
     
-    /* FONT SCALING - NO /MO ON LABELS */
+    /* FONT SCALING */
     .free-trial-title { font-size: 55px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 15px; }
     .big-stat { font-size: 85px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 32px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
@@ -54,7 +54,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. CORE FUNCTIONS ---
+# --- 4. FUNCTIONS ---
 def get_user_profile(user_id):
     try:
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -99,7 +99,7 @@ def trigger_auto_download(pdf_bytes, filename):
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION (REINFORCED 1-CLICK SUCCESS) ---
+# --- 5. AUTHENTICATION (ISOLATED 1-CLICK GATE) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -132,7 +132,7 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING VIEW ---
+# --- 7. PRICING VIEW (LIVE STRIPE LINKS) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
