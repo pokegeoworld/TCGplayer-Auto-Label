@@ -13,7 +13,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (PROMINENT TITLE & UI FIXES) ---
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -22,17 +22,17 @@ st.markdown("""
         font-size: 48px;
         font-weight: 800;
         text-align: center;
-        margin-top: -30px;
+        margin-top: -40px;
         padding-bottom: 5px;
         line-height: 1.1;
     }
     .hero-subtitle {
         color: #4B5563;
-        font-size: 19px;
+        font-size: 20px;
         text-align: center;
         padding-bottom: 30px;
     }
-    /* Hides the "Press Enter to submit form" helper text */
+    /* Hides the "Press Enter to submit form" text */
     div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -51,12 +51,14 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
-    # Fixed 4x6 Label Size
+    # Explicit 4x6 Page Size
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
+    
     can.setFont("Helvetica-Bold", 14)
     can.drawString(x, y, "TCGplayer Auto Labels")
     y -= 0.5*inch
+    
     can.setFont("Helvetica", 11)
     for qty, name, set_name in items:
         if y < 0.5*inch:
@@ -69,10 +71,10 @@ def create_label_pdf(items):
     packet.seek(0)
     return packet
 
-# --- 5. AUTHENTICATION SIDEBAR ---
+# --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">Fast, automated 4x6 label formatting for your packing slips.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">Professional 4x6 Label Generation</p>', unsafe_allow_html=True)
     
     with st.sidebar.form("auth_form"):
         st.subheader("Login / Sign Up")
@@ -87,67 +89,61 @@ if "user" not in st.session_state:
             res = supabase.auth.sign_in_with_password({"email": e, "password": p})
             st.session_state.user = res.user
             st.rerun()
-        except Exception:
-            st.sidebar.error("Invalid email or password.")
+        except: st.sidebar.error("Invalid email or password.")
             
     if signup_btn:
         try:
             res = supabase.auth.sign_up({"email": e, "password": p})
             if res.user:
-                # Attempt background profile creation
-                try: supabase.table("profiles").upsert({"id": res.user.id, "credits": 5}).execute()
-                except: pass
-                st.sidebar.success("Check your email or try logging in!")
+                st.sidebar.success("Account created! You can now Log In.")
         except Exception as err: st.sidebar.error(f"Error: {str(err)}")
     
-    st.info("👈 Please use the sidebar to log in and start.")
+    st.info("👈 Please log in via the sidebar to start.")
     st.stop()
 
 # --- 6. MAIN INTERFACE (Logged In) ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# Profile Check & Auto-Fix
+# Force-create profile row if it's missing (Fixes 42501 error on the fly)
 if not profile:
     try:
-        supabase.table("profiles").upsert({"id": user.id, "credits": 5}).execute()
+        supabase.table("profiles").upsert({"id": user.id, "credits": 5, "tier": "free"}).execute()
         profile = get_user_profile(user.id)
     except Exception as db_err:
         st.error(f"Database Sync Error. Ensure RLS SQL is run in Supabase. Details: {db_err}")
         st.stop()
 
-# Sidebar Info
-st.sidebar.title("Dashboard")
-st.sidebar.write(f"**User:** {user.email}")
+# Sidebar Stats
+st.sidebar.title("Your Account")
+st.sidebar.write(f"**Email:** {user.email}")
 st.sidebar.write(f"**Credits:** {profile.get('credits', 0)}")
 if st.sidebar.button("Log Out"):
     st.session_state.clear()
     st.rerun()
 
-# Prominent Title
+# Prominent Main Title
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 
-# Main Functionality
-file = st.file_uploader("Upload your TCGplayer Packing Slip PDF", type="pdf")
+uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip PDF", type="pdf")
 
-if file:
+if uploaded_file:
     if st.button("Generate 4x6 Labels"):
         if profile.get('credits', 0) > 0 or profile.get('tier') == "unlimited":
-            items = extract_tcg_data(file)
+            items = extract_tcg_data(uploaded_file)
             if items:
                 pdf_bytes = create_label_pdf(items)
                 try:
-                    # Deduct credit
+                    # Update credits
                     is_unlimited = profile.get('tier') == "unlimited"
                     new_count = profile.get('credits', 0) if is_unlimited else profile.get('credits', 0) - 1
-                    
                     supabase.table("profiles").update({"credits": new_count}).eq("id", user.id).execute()
                     
-                    st.success(f"Formatted {len(items)} labels for 4x6 print.")
-                    st.download_button("📥 Download Labels", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
+                    st.success(f"Success! Found {len(items)} items. Download your labels below.")
+                    st.download_button("📥 Download 4x6 PDF", pdf_bytes, "TCGplayer_Labels.pdf", "application/pdf")
                 except Exception as e:
                     st.error(f"Credit Update Failed: {e}")
             else:
-                st.error("No compatible data found in PDF.")
+                st.error("Could not find any order items in this PDF.")
         else:
-            st.error("Out of credits. Please contact support.")
+            st.error("Zero credits remaining. Please contact support.")
