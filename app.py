@@ -12,34 +12,23 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (CENTERED & BALANCED) ---
+# --- 3. STYLING (ENHANCED PRICING TEXT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
     .hero-title { color: #1E3A8A; font-size: 68px; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .hero-subtitle { color: #4B5563; font-size: 20px; text-align: center; margin-bottom: 30px; }
     
-    /* Centered Pricing Container */
-    .pricing-container {
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-        margin-bottom: 20px;
-    }
-    
     .pricing-card { 
         border: 1px solid #e1e4e8; 
-        padding: 30px 15px; 
+        padding: 35px 15px; 
         border-radius: 12px; 
         text-align: center; 
         background: white; 
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        transition: transform 0.2s;
-        min-height: 280px;
+        min-height: 320px;
     }
     
-    .pricing-card:hover { transform: translateY(-5px); }
-
     .sub-header {
         background: linear-gradient(90deg, #1E3A8A, #3B82F6);
         color: white; 
@@ -52,11 +41,15 @@ st.markdown("""
         max-width: 800px;
     }
     
-    .big-stat { font-size: 36px; font-weight: 900; color: #1E3A8A; margin: 10px 0 5px 0; }
-    .small-price { font-size: 18px; color: #6B7280; font-weight: 500; margin-bottom: 20px; }
-    .tier-name { font-size: 20px; font-weight: 700; color: #4B5563; text-transform: uppercase; letter-spacing: 1px; }
+    /* Bigger Label Counts */
+    .big-stat { font-size: 42px; font-weight: 900; color: #1E3A8A; margin: 15px 0 5px 0; line-height: 1; }
     
-    .stButton>button { width: 100%; border-radius: 8px; font-weight: 700; height: 45px; }
+    /* Bigger Price Text */
+    .small-price { font-size: 22px; color: #4B5563; font-weight: 600; margin-bottom: 25px; }
+    
+    .tier-name { font-size: 20px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 1.5px; }
+    
+    .stButton>button { width: 100%; border-radius: 8px; font-weight: 700; height: 50px; font-size: 18px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -108,7 +101,7 @@ def trigger_auto_download(pdf_bytes, filename):
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION (REINFORCED 1-CLICK) ---
+# --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
@@ -141,11 +134,10 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (CENTERED LAYOUT) ---
+# --- 7. PRICING WALL (LARGER FONTS) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     
-    # One-Time Options
     col_spacer_left, colA, colB, col_spacer_right = st.columns([1, 4, 4, 1])
     with colA:
         st.markdown('<div class="pricing-card"><p class="tier-name">Free Trial</p><p class="big-stat">5 Labels</p><p class="small-price">$0 One-Time</p></div>', unsafe_allow_html=True)
@@ -156,7 +148,6 @@ if profile.get('tier') == 'New':
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10 Labels</p><p class="small-price">$0.50 One-Time</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/test_5kQfZjgJ67x66ot5kW5J601")
 
-    # Subscription Section
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     
     c1, c2, c3 = st.columns(3)
