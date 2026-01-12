@@ -30,47 +30,35 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE PERFECTED PDF CREATOR (EXACT LAYOUT) ---
+# --- 4. THE PERFECTED PDF CREATOR ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    
-    # Section 1: Address (18pt Bold)
     can.setFont("Helvetica-Bold", 18)
     y = 5.7 * inch
     can.drawString(0.25*inch, y, data['buyer_name']); y -= 0.25*inch
     can.drawString(0.25*inch, y, data['address']); y -= 0.25*inch
     can.drawString(0.25*inch, y, data['city_state_zip']); y -= 0.3*inch
-    
-    # Dash Line 1
     can.setDash(3, 3)
     can.line(0.25*inch, y, 3.75*inch, y); y -= 0.25*inch
     can.setDash()
-    
-    # Section 2: Metadata (10pt)
     can.setFont("Helvetica", 10)
     can.drawString(0.25*inch, y, f"Order Date: {data['date']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Shipping Method: {data['method']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Buyer Name: {data['buyer_name']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Seller Name: {data['seller']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Order Number: {data['order_no']}"); y -= 0.2*inch
-    
-    # Dash Line 2
     can.setDash(3, 3)
     can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch
     can.setDash()
-    
-    # Section 3: Packing Table
     styles = getSampleStyleSheet()
     styleN = styles["BodyText"]
     styleN.fontSize = 9
     styleN.leading = 10
-
     table_data = [["QTY", "Description", "Price", "Total"]]
     for item in items:
         p_desc = Paragraph(item['desc'], styleN)
         table_data.append([item['qty'], p_desc, item['price'], item['total']])
-    
     table = Table(table_data, colWidths=[0.4*inch, 2.1*inch, 0.5*inch, 0.5*inch])
     table.setStyle(TableStyle([
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
@@ -78,10 +66,8 @@ def create_label_pdf(data, items):
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('BOTTOMPADDING', (0,0), (-1,-1), 6),
     ]))
-    
     w, h = table.wrapOn(can, 3.5*inch, y)
     table.drawOn(can, 0.25*inch, y - h)
-    
     can.save(); packet.seek(0)
     return packet
 
@@ -107,7 +93,7 @@ def extract_tcg_data(uploaded_file):
         return data, items
     except: return None, None
 
-# --- 6. AUTHENTICATION ---
+# --- 6. STABLE AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -168,9 +154,16 @@ if uploaded_file:
         h_data, i_list = extract_tcg_data(uploaded_file)
         if h_data:
             pdf_result = create_label_pdf(h_data, i_list)
+            filename = f"TCGplayer_{h_data['order_no']}.pdf"
+            
+            # Auto-download Logic
             if f"dl_{h_data['order_no']}" not in st.session_state:
-                if profile['tier'] != 'Unlimited': supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
+                if profile['tier'] != 'Unlimited': 
+                    supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
                 st.session_state[f"dl_{h_data['order_no']}"] = True
                 b64 = base64.b64encode(pdf_result.getvalue()).decode()
-                st.components.v1.html(f'<a id="autodl" href="data:application/pdf;base64,{b64}" download="TCGplayer_{h_data["order_no"]}.pdf"></a><script>document.getElementById("autodl").click();</script>', height=0)
-            st.download_button("📥 Download Label", data=pdf_result, file_name=f"TCGplayer_{h_data['order_no']}.pdf", mime="application/pdf", use_container_width=True)
+                # Reinforced JS auto-clicker
+                st.components.v1.html(f'<a id="autodl" href="data:application/pdf;base64,{b64}" download="{filename}"></a><script>setTimeout(() => {{ document.getElementById("autodl").click(); }}, 500);</script>', height=0)
+            
+            # Backup Manual Download Button
+            st.download_button("📥 Download Label (Backup)", data=pdf_result, file_name=filename, mime="application/pdf", use_container_width=True)
