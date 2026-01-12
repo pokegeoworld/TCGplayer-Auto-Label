@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (MATCHING AASDD.PNG) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -29,14 +29,12 @@ st.markdown("""
         font-size: 40px !important; text-transform: uppercase; letter-spacing: 2px;
     }
     
-    /* FONT SIZES PER AASDD.PNG */
     .free-trial-large { font-size: 65px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 20px; }
     .big-stat { font-size: 90px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 35px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 15px; }
     .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
     .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
     
-    /* BUTTON UNIFORMITY */
     div.stButton > button, div.stLinkButton > a {
         width: 100% !important; border-radius: 12px !important;
         font-weight: 800 !important; height: 75px !important;
@@ -48,7 +46,58 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. FUNCTIONS ---
+# --- 4. THE FIXED PDF CREATOR ---
+def create_label_pdf(items, order_no):
+    packet = io.BytesIO()
+    # 4x6 Inch Label Size
+    can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
+    
+    # Header Section
+    can.setFont("Helvetica-Bold", 16)
+    can.drawString(0.25*inch, 5.6*inch, "TCGplayer Auto Label")
+    can.setFont("Helvetica", 10)
+    can.drawString(0.25*inch, 5.4*inch, f"Order #: {order_no}")
+    
+    # Separator Line
+    can.setLineWidth(1.5)
+    can.line(0.25*inch, 5.3*inch, 3.75*inch, 5.3*inch)
+    
+    # Items List Section
+    y_pos = 5.0*inch
+    can.setFont("Helvetica-Bold", 12)
+    
+    for qty, desc in items:
+        if y_pos < 0.5*inch:
+            can.showPage()
+            y_pos = 5.5*inch
+            can.setFont("Helvetica-Bold", 12)
+            
+        qty_text = f"[{qty}x] "
+        can.drawString(0.25*inch, y_pos, qty_text)
+        
+        can.setFont("Helvetica", 10)
+        desc_x_start = 0.75*inch
+        limit = 3.0 * inch
+        
+        words = desc.split()
+        line = ""
+        for word in words:
+            if can.stringWidth(line + word + " ", "Helvetica", 10) < limit:
+                line += word + " "
+            else:
+                can.drawString(desc_x_start, y_pos, line.strip())
+                y_pos -= 0.15*inch
+                line = word + " "
+        
+        can.drawString(desc_x_start, y_pos, line.strip())
+        y_pos -= 0.35*inch # Gap between entries
+        can.setFont("Helvetica-Bold", 12)
+        
+    can.save()
+    packet.seek(0)
+    return packet
+
+# --- 5. CORE FUNCTIONS ---
 def get_user_profile(user_id):
     try:
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -61,6 +110,7 @@ def extract_tcg_data(uploaded_file):
     order_match = re.search(r"Order\s*Number:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
     items = []
+    # Improved regex to handle TCGplayer table format accurately
     for line in text.split('\n'):
         match = re.match(r"^(\d+)\s+([\w\s\'\-\,\!\.\?\(\)\#\/]+).*?$", line.strip(), re.IGNORECASE)
         if match:
@@ -69,32 +119,13 @@ def extract_tcg_data(uploaded_file):
             items.append((qty, clean_desc))
     return items, order_no
 
-def create_label_pdf(items, order_no):
-    packet = io.BytesIO()
-    can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    can.setFont("Helvetica-Bold", 16); can.drawString(0.25*inch, 5.6*inch, "TCGplayer Auto Label")
-    can.setFont("Helvetica", 10); can.drawString(0.25*inch, 5.4*inch, f"Order #: {order_no}")
-    can.setLineWidth(1); can.line(0.25*inch, 5.3*inch, 3.75*inch, 5.3*inch)
-    y_pos = 5.0*inch; can.setFont("Helvetica", 11)
-    for qty, desc in items:
-        if y_pos < 0.5*inch: can.showPage(); y_pos = 5.5*inch; can.setFont("Helvetica", 11)
-        full_text, limit = f"[{qty}x] {desc}", 3.5 * inch
-        words, line = full_text.split(), ""
-        for word in words:
-            if can.stringWidth(line + word + " ", "Helvetica", 11) < limit: line += word + " "
-            else:
-                can.drawString(0.25*inch, y_pos, line.strip()); y_pos -= 0.18*inch; line = "      " + word + " "
-        can.drawString(0.25*inch, y_pos, line.strip()); y_pos -= 0.3*inch
-    can.save(); packet.seek(0)
-    return packet
-
 def trigger_auto_download(pdf_bytes, filename):
     b64 = base64.b64encode(pdf_bytes.getvalue()).decode()
     dl_link = f"""<a id="autodl" href="data:application/pdf;base64,{b64}" download="{filename}"></a>
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION (REINFORCED 1-CLICK SUCCESS) ---
+# --- 6. AUTHENTICATION (REINFORCED 1-CLICK SUCCESS) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -115,7 +146,7 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. MAIN APP LOGIC ---
+# --- 7. MAIN APP LOGIC ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 if not profile:
@@ -127,10 +158,9 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (EXACT MATCH TO PNG) ---
+# --- 8. PRICING WALL ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
-    
     colA, colB = st.columns(2)
     with colA:
         st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
@@ -142,7 +172,6 @@ if profile.get('tier') == 'New':
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
 
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
-    
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
@@ -155,7 +184,7 @@ if profile.get('tier') == 'New':
         st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
     st.stop()
 
-# --- 8. CREATOR VIEW ---
+# --- 9. CREATOR VIEW ---
 st.sidebar.write(f"Plan: **{profile['tier']}** | Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
