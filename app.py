@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (68PX TITLE & 450PX SIDEBAR) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
@@ -43,7 +43,9 @@ def get_user_profile(user_id):
 
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
-    text = "".join([p.extract_text() + "\n" for p in reader.pages])
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() + "\n"
     order_match = re.search(r"Order\s*Number:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
     items = []
@@ -80,30 +82,41 @@ def trigger_auto_download(pdf_bytes, filename):
     """
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION (FIXED 1-CLICK LOGIN) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
     with st.sidebar.form("auth"):
+        st.subheader("Account Access")
         e, p = st.text_input("Email"), st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
-        if c1.form_submit_button("Log In"):
-            st.session_state.clear()
+        login_btn = c1.form_submit_button("Log In")
+        signup_btn = c2.form_submit_button("Sign Up")
+
+        if login_btn:
             try:
+                # Clear state to prevent first-click cache issues
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
                 if res.user:
-                    st.session_state.user = res.user; st.rerun()
-            except: st.error("Login failed.")
-        if c2.form_submit_button("Sign Up"):
+                    st.session_state.user = res.user
+                    # Immediate rerun to bypass Streamlit's login delay
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials.")
+            except: 
+                st.error("Login failed. Check your password.")
+        
+        if signup_btn:
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
-                st.success("Success! Please Log In.")
+                st.success("Success! Now click 'Log In'.")
             except: st.error("Signup failed.")
     st.stop()
 
 # --- 6. MAIN DASHBOARD ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
+
 if not profile:
     try:
         supabase.table("profiles").insert({"id": user.id, "credits": 10}).execute()
@@ -132,10 +145,10 @@ if uploaded_file:
                 supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
                 st.session_state[f"last_dl_{order_no}"] = True
                 trigger_auto_download(pdf_result, filename)
-                st.success(f"Deducted 1 credit. Downloading {filename}...")
+                st.success(f"Deducted 1 credit. Label processed for Order {order_no}.")
 
             st.download_button(
-                label="📥 Download Didn't Start? Click Here",
+                label="📥 Click to Download Label",
                 data=pdf_result,
                 file_name=filename,
                 mime="application/pdf",
