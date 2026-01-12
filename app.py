@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (HIGH-IMPACT UI) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -42,8 +42,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR ---
-def create_label_pdf(all_text, data, items):
+# --- 4. THE DYNAMIC PDF CREATOR (STRICT 18PT BOLD) ---
+def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
@@ -106,7 +106,7 @@ def create_label_pdf(all_text, data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION & DATABASE ---
+# --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -118,24 +118,30 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Login Failed.")
     st.stop()
 
+# --- 6. SIDEBAR ACCOUNT SETTINGS (RESTORED) ---
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
+
 if not profile:
     supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
     profile = {"id": user.id, "credits": 0, "tier": "None"}
 
+st.sidebar.title("🎴 Account Controls")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
+st.sidebar.write(f"Tier: **{'Active' if profile['credits'] > 0 else profile['tier']}**")
+st.sidebar.markdown("---")
+st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 6. PRICING GATE ---
+# --- 7. PRICING GATE ---
 if profile['credits'] == 0 and profile['tier'] == "None":
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     if st.button("Activate Free Trial"):
         supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
     st.stop()
 
-# --- 7. DYNAMIC CREATOR VIEW ---
+# --- 8. DYNAMIC CREATOR VIEW ---
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
@@ -166,11 +172,11 @@ if uploaded_file:
         for qty, desc, price, total in item_rows:
             items.append({'qty': qty, 'desc': desc.replace('\n', ' ').strip(), 'price': f"${price}", 'total': f"${total}"})
 
-        pdf_bytes = create_label_pdf(text, data, items)
+        pdf_bytes = create_label_pdf(data, items)
         st.download_button(
             label=f"📥 DOWNLOAD LABEL: {order_no}",
             data=pdf_bytes, file_name=f"TCGplayer_{order_no}.pdf", mime="application/pdf", use_container_width=True,
             on_click=lambda: (supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute())
         )
     except Exception as e:
-        st.error(f"Error reading file: {e}")
+        st.error(f"Error reading file. Ensure it is a valid TCGplayer packing slip.")
