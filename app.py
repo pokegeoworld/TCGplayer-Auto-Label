@@ -47,15 +47,12 @@ def extract_tcg_data(uploaded_file):
     for page in reader.pages:
         text += page.extract_text() + "\n"
     
-    # [cite_start]Extract Order Number [cite: 30]
     order_match = re.search(r"Order\s*Number:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
 
-    # [cite_start]Robust extraction for the table format provided [cite: 31]
     items = []
     lines = text.split('\n')
     for line in lines:
-        # Match lines starting with a digit followed by Pokemon/Magic/etc
         match = re.match(r"^(\d+)\s+(Pokemon|Magic|Yu-Gi-Oh|Lorcana|Disney).*?$", line.strip(), re.IGNORECASE)
         if match:
             qty = match.group(1)
@@ -67,42 +64,20 @@ def create_label_pdf(items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
-    
-    can.setFont("Helvetica-Bold", 14)
-    can.drawString(x, y, "TCGplayer Auto Labels")
+    can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
     y -= 0.5*inch
-    
     can.setFont("Helvetica", 11)
     for qty, desc in items:
         if y < 0.8*inch:
-            can.showPage()
-            y = 5.75*inch
-            can.setFont("Helvetica", 11)
-        
-        # Clean up description (remove excessive whitespace)
+            can.showPage(); y = 5.75*inch; can.setFont("Helvetica", 11)
         clean_desc = " ".join(desc.split())
-        can.drawString(x, y, f"[{qty}x] {clean_desc}")
-        y -= lh
+        can.drawString(x, y, f"[{qty}x] {clean_desc}"); y -= lh
     
-    # Return Address
     can.setFont("Helvetica-Oblique", 8); can.setStrokeColorRGB(0.8, 0.8, 0.8)
     can.line(0.25*inch, 0.5*inch, 3.75*inch, 0.5*inch)
     can.drawString(0.25*inch, 0.35*inch, "Return: 36 Michael Anthony ln, Depew NY 14043")
-    
     can.save(); packet.seek(0)
     return packet
-
-def auto_download(pdf_bytes, filename):
-    b64 = base64.b64encode(pdf_bytes.read()).decode()
-    dl_link = f"""
-    <script>
-    var link = document.createElement('a');
-    link.href = 'data:application/pdf;base64,{b64}';
-    link.download = '{filename}';
-    link.click();
-    </script>
-    """
-    st.components.v1.html(dl_link, height=0)
 
 # --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
@@ -117,8 +92,7 @@ if "user" not in st.session_state:
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
                 if res.user:
-                    st.session_state.user = res.user
-                    st.rerun()
+                    st.session_state.user = res.user; st.rerun()
             except: st.error("Login failed.")
         if c2.form_submit_button("Sign Up"):
             try:
@@ -145,7 +119,7 @@ if st.sidebar.button("Log Out"):
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload TCGplayer PDF to Auto-Download Label", type="pdf")
+uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
     if profile['credits'] > 0:
@@ -154,13 +128,20 @@ if uploaded_file:
             pdf_result = create_label_pdf(items)
             filename = f"TCGplayer_{order_no}.pdf"
             
-            # Deduct Credit
+            # Deduct Credit and refresh profile to prevent over-deduction on retry
             new_c = profile['credits'] - 1
             supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
             
-            # Execute Download
-            auto_download(pdf_result, filename)
-            st.success(f"Downloading {filename}...")
+            # Show a clear Download Button as the primary action (more reliable than script injection)
+            st.success(f"Label Generated for Order {order_no}!")
+            st.download_button(
+                label="📥 Download Label PDF",
+                data=pdf_result,
+                file_name=filename,
+                mime="application/pdf",
+                use_container_width=True
+            )
+            st.info("Click the button above if the download didn't start automatically.")
         else:
             st.error("No item data found. Check PDF format.")
     else:
