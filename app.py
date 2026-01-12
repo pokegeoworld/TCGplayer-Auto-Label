@@ -36,12 +36,12 @@ st.markdown("""
 # --- 4. LOGIC FUNCTIONS ---
 def get_or_create_profile(user_id):
     try:
-        # Step 1: Check for existing
+        # Step 1: Check for existing profile
         res = supabase.table("profiles").select("*").eq("id", user_id).execute()
         if res.data:
             return res.data[0]
         
-        # Step 2: If missing, force create (Upsert is more resilient than Insert)
+        # Step 2: Create if missing (Upsert bypasses the 42501 error with the new policy)
         new_prof = supabase.table("profiles").upsert({"id": user_id, "credits": 5, "tier": "free"}).execute()
         return new_prof.data[0]
     except Exception as e:
@@ -77,12 +77,12 @@ if "user" not in st.session_state:
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
                 st.session_state.user = res.user; st.rerun()
-            except: st.sidebar.error("Login failed.")
+            except: st.sidebar.error("Login failed. Check your password.")
         if c2.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
                 st.sidebar.success("Account created! Now click 'Log In'.")
-            except: st.sidebar.error("Signup failed.")
+            except: st.sidebar.error("Signup failed. User may already exist.")
     st.stop()
 
 # --- 6. MAIN DASHBOARD ---
@@ -92,6 +92,7 @@ profile = get_or_create_profile(user.id)
 if not profile:
     st.stop()
 
+st.sidebar.write(f"Logged in as: **{user.email}**")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); st.rerun()
