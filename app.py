@@ -59,11 +59,15 @@ def create_label_pdf(items):
 # --- 4. AUTHENTICATION LOGIC ---
 if "user" not in st.session_state:
     st.sidebar.title("Login / Signup")
-    email = st.sidebar.text_input("Email")
-    password = st.sidebar.text_input("Password", type="password")
     
-    col1, col2 = st.sidebar.columns(2)
-    if col1.button("Log In"):
+    # Use st.form to capture the Enter key press
+    with st.sidebar.form("auth_form"):
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        login_submitted = st.form_submit_button("Log In")
+        signup_submitted = st.form_submit_button("Sign Up")
+
+    if login_submitted:
         try:
             res = supabase.auth.sign_in_with_password({"email": email, "password": password})
             st.session_state.user = res.user
@@ -71,16 +75,15 @@ if "user" not in st.session_state:
         except Exception:
             st.sidebar.error("Invalid email or password.")
             
-    if col2.button("Sign Up"):
+    if signup_submitted:
         try:
             res = supabase.auth.sign_up({"email": email, "password": password})
             if res.user:
-                # Use a try block for the insert in case RLS is blocking it
                 try:
                     supabase.table("profiles").upsert({"id": res.user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
                     st.sidebar.success("Account created! Please Log In.")
-                except Exception as db_err:
-                    st.sidebar.error("Auth successful, but Database rejected the profile. Check RLS policies.")
+                except Exception:
+                    st.sidebar.error("Database error during signup.")
         except Exception as e:
             st.sidebar.error(f"Signup failed: {str(e)}")
     
@@ -98,7 +101,7 @@ if user and not profile:
         supabase.table("profiles").upsert({"id": user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
         profile = get_user_profile(user.id)
     except Exception:
-        st.error("Permissions Error: Your Supabase account is blocking database updates. Please check your RLS policies.")
+        st.error("Permissions Error: Check your Supabase RLS policies.")
         st.stop()
 
 if profile:
@@ -127,7 +130,7 @@ if profile:
                     st.success(f"Parsed {len(data)} items.")
                     st.download_button("📥 Download 4x6 PDF", pdf_output, "TCG_4x6.pdf", "application/pdf")
                 except Exception:
-                    st.error("Failed to update credits in database. Check RLS settings.")
+                    st.error("Failed to update credits in database.")
             else:
                 st.error("No items found in PDF.")
         else:
