@@ -14,16 +14,12 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (Including fix to hide "Press Enter to Submit") ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
     .title-text { color: #1E3A8A; font-size: 32px; font-weight: bold; text-align: center; padding-bottom: 20px; }
-    
-    /* Hides the "Press Enter to submit form" text */
-    div[data-testid="stForm"] small {
-        display: none;
-    }
+    div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -65,11 +61,9 @@ def create_label_pdf(items):
 # --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.sidebar.title("Login / Signup")
-    
     with st.sidebar.form("auth_form"):
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
-        
         col1, col2 = st.columns(2)
         login_submitted = col1.form_submit_button("Log In")
         signup_submitted = col2.form_submit_button("Sign Up")
@@ -89,7 +83,7 @@ if "user" not in st.session_state:
                 supabase.table("profiles").upsert({"id": res.user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
                 st.sidebar.success("Account created! Please Log In.")
         except Exception as e:
-            st.sidebar.error(f"Signup failed: {str(e)}")
+            st.sidebar.error(f"Signup error: {str(e)}")
     
     st.markdown('<p class="title-text">TCGplayer 4x6 Labeler</p>', unsafe_allow_html=True)
     st.info("Please log in via the sidebar to access the label generator.")
@@ -103,19 +97,15 @@ if user and not profile:
     try:
         supabase.table("profiles").upsert({"id": user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
         profile = get_user_profile(user.id)
-    except:
-        st.error("Database Error. Check RLS policies.")
+    except Exception as e:
+        st.error(f"Database Error: {str(e)}")
         st.stop()
 
 if profile:
-    tier = profile.get("tier", "free")
-    credits = profile.get("credits", 0)
-    used = profile.get("used_this_month", 0)
-    
+    tier, credits, used = profile.get("tier", "free"), profile.get("credits", 0), profile.get("used_this_month", 0)
     st.sidebar.title("Your Account")
     st.sidebar.write(f"Logged in: **{user.email}**")
     st.sidebar.write(f"Credits: **{credits}**")
-    
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
@@ -123,20 +113,21 @@ if profile:
     st.markdown('<p class="title-text">TCGplayer 4x6 Label Creator</p>', unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
     
-    if uploaded_file:
-        if st.button("Generate 4x6 Labels"):
-            if tier == "unlimited" or credits > 0:
-                data = extract_tcg_data(uploaded_file)
-                if data:
-                    pdf_output = create_label_pdf(data)
+    if uploaded_file and st.button("Generate 4x6 Labels"):
+        if tier == "unlimited" or credits > 0:
+            data = extract_tcg_data(uploaded_file)
+            if data:
+                pdf_output = create_label_pdf(data)
+                try:
                     supabase.table("profiles").update({
                         "used_this_month": used + 1,
                         "credits": credits if tier == "unlimited" else credits - 1
                     }).eq("id", user.id).execute()
-                    
                     st.success(f"Parsed {len(data)} items.")
                     st.download_button("📥 Download 4x6 PDF", pdf_output, "TCG_4x6.pdf", "application/pdf")
-                else:
-                    st.error("No items found in PDF.")
+                except Exception as e:
+                    st.error(f"Credit Update Failed: {str(e)}")
             else:
-                st.error("No credits remaining.")
+                st.error("No items found in PDF.")
+        else:
+            st.error("No credits remaining.")
