@@ -12,117 +12,94 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (REVERTED TO STABLE SIDE-BY-SIDE LAYOUT) ---
+# --- 3. STYLING (SURGICAL LAYOUT & MASSIVE FONTS) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
-    .pricing-card { border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); min-height: 380px; display: flex; flex-direction: column; justify-content: center; }
-    .sub-header { background: #3B82F6; color: white; padding: 25px; border-radius: 12px; text-align: center; font-weight: 900; margin: 40px auto 25px auto; font-size: 40px !important; text-transform: uppercase; }
-    .free-trial-large { font-size: 65px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 20px; }
-    .big-stat { font-size: 90px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
-    .label-text { font-size: 35px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 15px; }
-    .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
-    .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
-    div.stButton > button, div.stLinkButton > a { width: 100% !important; border-radius: 12px !important; font-weight: 800 !important; height: 75px !important; font-size: 24px !important; background-color: #1E3A8A !important; color: white !important; display: flex !important; align-items: center !important; justify-content: center !important; text-decoration: none !important; border: none !important; }
+    
+    .pricing-card { 
+        border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; 
+        text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
+        min-height: 350px; display: flex; flex-direction: column; justify-content: center;
+        margin-bottom: 10px;
+    }
+    .sub-header { 
+        background: linear-gradient(90deg, #1E3A8A, #3B82F6); color: white; 
+        padding: 20px; border-radius: 12px; text-align: center; font-weight: 900; 
+        margin: 45px auto 25px auto; font-size: 35px !important; 
+    }
+    
+    /* FONT SCALING - NO /MO ON LABELS */
+    .free-trial-title { font-size: 55px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 15px; }
+    .big-stat { font-size: 85px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
+    .label-text { font-size: 32px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
+    .small-price { font-size: 30px !important; color: #374151; font-weight: 800; margin-top: 10px; }
+    .tier-name { font-size: 24px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; }
+    
+    /* TARGETED FIX: TOP ROW BUTTONS MATCH CARD WIDTH EXACTLY */
+    .top-row-btn div.stButton > button, .top-row-btn div.stLinkButton > a {
+        width: 100% !important; 
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+        height: 70px !important;
+        font-size: 22px !important;
+        background-color: #1E3A8A !important;
+        color: white !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-decoration: none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE PERFECTED PDF CREATOR (RE-BUILT FROM SCRATCH) ---
-def create_label_pdf(data, items):
-    packet = io.BytesIO()
-    can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    
-    # 1. Customer Name & Address (18pt Font)
-    can.setFont("Helvetica-Bold", 18)
-    y = 5.7*inch
-    can.drawString(0.25*inch, y, data['name']); y -= 0.3*inch
-    can.drawString(0.25*inch, y, data['address']); y -= 0.3*inch
-    can.drawString(0.25*inch, y, data['city_state_zip']); y -= 0.4*inch
-    
-    # 2. Order Metadata Section
-    can.setFont("Helvetica", 10)
-    meta = [
-        f"Order Date: {data['date']}",
-        f"Shipping Method: {data['method']}",
-        f"Buyer Name: {data['name']}",
-        f"Seller Name: {data['seller']}",
-        f"Order Number: {data['order_no']}"
-    ]
-    for line in meta:
-        can.drawString(0.25*inch, y, line)
-        y -= 0.15*inch
-    
-    # 3. Bold Separator
-    y -= 0.1*inch
-    can.setLineWidth(1.5); can.line(0.25*inch, y, 3.75*inch, y); y -= 0.25*inch
-    
-    # 4. Packing List Header
-    can.setFont("Helvetica-Bold", 11)
-    can.drawString(0.25*inch, y, "QTY")
-    can.drawString(0.75*inch, y, "Description")
-    can.drawString(3.0*inch, y, "Price")
-    can.drawString(3.5*inch, y, "Total")
-    y -= 0.2*inch
-    
-    # 5. Items List
-    can.setFont("Helvetica", 9)
-    for item in items:
-        if y < 0.5*inch: can.showPage(); y = 5.7*inch; can.setFont("Helvetica", 9)
-        
-        # QTY
-        can.drawString(0.25*inch, y, f"{item['qty']}x")
-        
-        # Description with Wrap
-        desc_text = item['desc']
-        limit = 2.1 * inch
-        words = desc_text.split()
-        line = ""
-        first_line = True
-        for word in words:
-            if can.stringWidth(line + word + " ", "Helvetica", 9) < limit:
-                line += word + " "
-            else:
-                can.drawString(0.75*inch, y, line.strip())
-                y -= 0.12*inch
-                line = word + " "
-        can.drawString(0.75*inch, y, line.strip())
-        
-        # Price and Total (Aligned to same Y as the end of description)
-        can.drawString(3.0*inch, y, item['price'])
-        can.drawString(3.5*inch, y, item['total'])
-        y -= 0.25*inch
+# --- 4. CORE FUNCTIONS ---
+def get_user_profile(user_id):
+    try:
+        res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
+        return res.data
+    except: return None
 
-    can.save(); packet.seek(0)
-    return packet
-
-# --- 5. DATA EXTRACTION ---
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
-    
-    # Extract Header Info
-    lines = text.split('\n')
-    data = {
-        'name': lines[0].replace("", "").strip(),
-        'address': lines[1].replace("", "").strip(),
-        'city_state_zip': lines[2].replace("", "").strip(),
-        'date': re.search(r"Order Date:\s*(.*)", text).group(1).strip(),
-        'method': re.search(r"Shipping Method:\s*(.*)", text).group(1).strip(),
-        'seller': re.search(r"Seller Name:\s*(.*)", text).group(1).strip(),
-        'order_no': re.search(r"Order Number:\s*(.*)", text).group(1).strip()
-    }
-    
-    # Extract Items
+    order_match = re.search(r"Order\s*Number:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
+    order_no = order_match.group(1) if order_match else "Unknown"
     items = []
-    # Match pattern: "Qty", "Description", "Price", "Total"
-    item_matches = re.findall(r'"(\d+)"\s*,\s*"([\s\S]*?)"\s*,\s*"\s*\\\$([\d\.]+)"\s*,\s*"\s*\\\$([\d\.]+)"', text)
-    for m in item_matches:
-        items.append({'qty': m[0], 'desc': m[1].replace('\n', ' ').strip(), 'price': f"${m[2]}", 'total': f"${m[3]}"})
-    
-    return data, items
+    for line in text.split('\n'):
+        match = re.match(r"^(\d+)\s+([\w\s\'\-\,\!\.\?\(\)\#\/]+).*?$", line.strip(), re.IGNORECASE)
+        if match:
+            qty, desc = match.groups()
+            clean_desc = re.split(r"\s+\\\$", desc)[0].strip()
+            items.append((qty, clean_desc))
+    return items, order_no
 
-# --- 6. AUTHENTICATION & APP LOGIC ---
+def create_label_pdf(items):
+    packet = io.BytesIO()
+    can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
+    x, y = 0.25*inch, 5.7*inch
+    can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
+    y -= 0.4*inch; can.setFont("Helvetica", 10)
+    for qty, desc in items:
+        if y < 0.5*inch: can.showPage(); y = 5.7*inch; can.setFont("Helvetica", 10)
+        full_text, limit = f"[{qty}x] {desc}", 3.5 * inch
+        words, line = full_text.split(), ""
+        for word in words:
+            if can.stringWidth(line + word + " ", "Helvetica", 10) < limit: line += word + " "
+            else:
+                can.drawString(x, y, line.strip()); y -= 0.15*inch; line = word + " "
+        can.drawString(x, y, line.strip()); y -= 0.25*inch
+    can.save(); packet.seek(0)
+    return packet
+
+def trigger_auto_download(pdf_bytes, filename):
+    b64 = base64.b64encode(pdf_bytes.getvalue()).decode()
+    dl_link = f"""<a id="autodl" href="data:application/pdf;base64,{b64}" download="{filename}"></a>
+    <script>document.getElementById('autodl').click();</script>"""
+    st.components.v1.html(dl_link, height=0)
+
+# --- 5. AUTHENTICATION (REINFORCED 1-CLICK SUCCESS) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -132,7 +109,9 @@ if "user" not in st.session_state:
     if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if res.user: st.session_state.user = res.user; st.rerun() 
+            if res.user:
+                st.session_state.user = res.user
+                st.rerun() 
         except: st.sidebar.error("Login failed.")
     if r_col.button("Sign Up"):
         try:
@@ -141,35 +120,45 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
+# --- 6. MAIN APP LOGIC ---
 user = st.session_state.user
-profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
+profile = get_user_profile(user.id)
 if not profile:
-    supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
-    profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
+    try:
+        supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
+        profile = get_user_profile(user.id)
+    except: st.error("Database sync failed."); st.stop()
 
-if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+if st.sidebar.button("Log Out"):
+    st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (STABLE VERSION) ---
+# --- 7. PRICING VIEW ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="free-trial-title">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="top-row-btn">', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
-            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
+            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="top-row-btn">', unsafe_allow_html=True)
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
+        st.markdown('</div>', unsafe_allow_html=True)
+
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Basic</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
     with c2:
-        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Pro</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
     with c3:
-        st.markdown('<div class="pricing-card"><p class="tier-name">UNLIMITED</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Unlimited</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
     st.stop()
 
@@ -180,12 +169,13 @@ uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
     if profile['tier'] == 'Unlimited' or profile['credits'] > 0:
-        header_data, items_list = extract_tcg_data(uploaded_file)
-        if items_list:
-            pdf_result = create_label_pdf(header_data, items_list)
-            if f"dl_{header_data['order_no']}" not in st.session_state:
-                if profile['tier'] != 'Unlimited': supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
-                st.session_state[f"dl_{header_data['order_no']}"] = True
-                b64 = base64.b64encode(pdf_result.getvalue()).decode()
-                st.components.v1.html(f'<a id="autodl" href="data:application/pdf;base64,{b64}" download="TCGplayer_{header_data["order_no"]}.pdf"></a><script>document.getElementById("autodl").click();</script>', height=0)
-            st.download_button("📥 Download Label", data=pdf_result, file_name=f"TCGplayer_{header_data['order_no']}.pdf", mime="application/pdf", use_container_width=True)
+        items, order_no = extract_tcg_data(uploaded_file)
+        if items:
+            pdf_result = create_label_pdf(items)
+            filename = f"TCGplayer_{order_no}.pdf"
+            if f"dl_{order_no}" not in st.session_state:
+                if profile['tier'] != 'Unlimited':
+                    supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
+                st.session_state[f"dl_{order_no}"] = True
+                trigger_auto_download(pdf_result, filename)
+            st.download_button("📥 Download Label", data=pdf_result, file_name=filename, mime="application/pdf", use_container_width=True)
