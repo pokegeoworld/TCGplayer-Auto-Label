@@ -32,7 +32,7 @@ st.markdown("""
         text-align: center;
         padding-bottom: 30px;
     }
-    /* Hides the "Press Enter to submit form" text */
+    /* Hides the "Press Enter to submit form" helper text */
     div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -52,7 +52,7 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
-    # Explicit 4x6 Dimensions
+    # Explicit 4x6 Page Size
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
     can.setFont("Helvetica-Bold", 14)
@@ -77,11 +77,9 @@ if "user" not in st.session_state:
     
     with st.sidebar.form("auth_form"):
         st.subheader("Account Login")
-        e = st.text_input("Email")
-        p = st.text_input("Password", type="password")
+        e, p = st.text_input("Email"), st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
-        login_btn = c1.form_submit_button("Log In")
-        signup_btn = c2.form_submit_button("Sign Up")
+        login_btn, signup_btn = c1.form_submit_button("Log In"), c2.form_submit_button("Sign Up")
 
     if login_btn:
         try:
@@ -92,18 +90,19 @@ if "user" not in st.session_state:
             
     if signup_btn:
         try:
-            # Trigger handles profile creation AFTER signup
+            # Note: Signup relies on the Database Trigger in Supabase
             supabase.auth.sign_up({"email": e, "password": p})
             st.sidebar.success("Account created! You can now Log In.")
         except Exception: 
             st.sidebar.error("Signup failed. Check SQL Trigger configuration.")
+    st.info("👈 Please log in via the sidebar to start.")
     st.stop()
 
 # --- 6. MAIN INTERFACE ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# If profile is missing (older account), attempt one silent sync
+# Silent Repair: If profile is missing, attempt to create it
 if not profile:
     try:
         supabase.table("profiles").upsert({"id": user.id, "credits": 5, "tier": "free", "used_this_month": 0}).execute()
@@ -138,8 +137,6 @@ if uploaded_file and st.button("Generate 4x6 Labels"):
                 supabase.table("profiles").update({"credits": new_count}).eq("id", user.id).execute()
                 st.success(f"Success! Found {len(items)} items.")
                 st.download_button("📥 Download 4x6 PDF", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
-            except: st.error("Database error. Credit update failed.")
-        else:
-            st.error("No items found in PDF.")
-    else:
-        st.error("No credits remaining.")
+            except: st.error("Credit update failed. Please check RLS policies.")
+        else: st.error("No items found in PDF.")
+    else: st.error("No credits remaining.")
