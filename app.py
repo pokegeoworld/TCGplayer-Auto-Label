@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (RESTORED TO ORIGINAL SIDE-BY-SIDE BUTTONS) ---
+# --- 3. STYLING (UNCHANGED STABLE LAYOUT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -27,7 +27,6 @@ st.markdown("""
     .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
     .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
     
-    /* Refined Download Button Style */
     .stDownloadButton > button {
         background-color: #15803d !important;
         color: white !important;
@@ -51,38 +50,30 @@ st.markdown("""
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    can.setFont("Helvetica-Bold", 14) # Reduced font size as requested
+    can.setFont("Helvetica-Bold", 14) 
     y = 5.7 * inch
     can.drawString(0.25*inch, y, data['buyer_name']); y -= 0.22*inch
     can.drawString(0.25*inch, y, data['address']); y -= 0.22*inch
     can.drawString(0.25*inch, y, data['city_state_zip']); y -= 0.3*inch
-    can.setDash(3, 3)
-    can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch
-    can.setDash()
+    can.setDash(3, 3); can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch; can.setDash()
     can.setFont("Helvetica", 10)
     can.drawString(0.25*inch, y, f"Order Date: {data['date']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Shipping Method: {data['method']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Buyer Name: {data['buyer_name']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Seller Name: {data['seller']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Order Number: {data['order_no']}"); y -= 0.2*inch
-    can.setDash(3, 3)
-    can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch
-    can.setDash()
-    styles = getSampleStyleSheet()
-    styleN = styles["BodyText"]
-    styleN.fontSize = 8; styleN.leading = 9
+    can.setDash(3, 3); can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch; can.setDash()
+    styles = getSampleStyleSheet(); styleN = styles["BodyText"]; styleN.fontSize = 8; styleN.leading = 9
     table_data = [["QTY", "Description", "Price", "Total"]]
     for item in items:
         p_desc = Paragraph(item['desc'], styleN)
         table_data.append([item['qty'], p_desc, item['price'], item['total']])
     table = Table(table_data, colWidths=[0.35*inch, 2.2*inch, 0.45*inch, 0.5*inch])
     table.setStyle(TableStyle([('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),('VALIGN', (0,0), (-1,-1), 'TOP'),('BOTTOMPADDING', (0,0), (-1,-1), 4),('FONTSIZE', (0,0), (-1,-1), 8)]))
-    w, h = table.wrapOn(can, 3.5*inch, y)
-    table.drawOn(can, 0.25*inch, y - h)
-    can.save(); packet.seek(0)
-    return packet
+    w, h = table.wrapOn(can, 3.5*inch, y); table.drawOn(can, 0.25*inch, y - h); can.save(); packet.seek(0)
+    return packet.getvalue() # FIXED: Return raw bytes for st.download_button
 
-# --- 5. DATA EXTRACTION (FIXED ITEM EXTRACTION) ---
+# --- 5. DATA EXTRACTION ---
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
@@ -99,7 +90,6 @@ def extract_tcg_data(uploaded_file):
             'order_no': re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
         }
         items = []
-        # [cite_start]Specifically targeting the CSV table lines in the uploaded PDF [cite: 25]
         item_matches = re.findall(r'\"(\d+)\"\s*,\s*\"([\s\S]*?)\"\s*,\s*\"\\\$([\d\.]+)\"\s*,\s*\"\\\$([\d\.]+)\"', text)
         for m in item_matches:
             if "Total" in m[1]: continue
@@ -111,14 +101,12 @@ def extract_tcg_data(uploaded_file):
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    u_email = st.sidebar.text_input("Email")
-    u_pass = st.sidebar.text_input("Password", type="password")
+    u_email = st.sidebar.text_input("Email"); u_pass = st.sidebar.text_input("Password", type="password")
     if st.sidebar.button("Log In"):
         res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
         if res.user: st.session_state.user = res.user; st.rerun() 
     if st.sidebar.button("Sign Up"):
-        supabase.auth.sign_up({"email": u_email, "password": u_pass})
-        st.sidebar.success("Account Created! Click Log In.")
+        supabase.auth.sign_up({"email": u_email, "password": u_pass}); st.sidebar.success("Account Created! Click Log In.")
     st.stop()
 
 # --- 7. MAIN APP DASHBOARD ---
@@ -131,14 +119,13 @@ if not profile:
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 8. PRICING VIEW (RESTORED ALL 5 TIERS) ---
+# --- 8. PRICING VIEW ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
         st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
-        if st.button("Activate Free Trial"):
-            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
+        if st.button("Activate Free Trial"): supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
@@ -163,9 +150,15 @@ uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 if uploaded_file:
     h_data, i_list = extract_tcg_data(uploaded_file)
     if h_data:
-        pdf_bytes = create_label_pdf(h_data, i_list)
+        # PRE-PROCESS: Generate PDF bytes once here
+        final_pdf_bytes = create_label_pdf(h_data, i_list)
+        
+        # DOWNLOAD BUTTON: Now uses pre-generated data for stability
         st.download_button(
             label=f"📥 DOWNLOAD LABEL PDF: {h_data['order_no']}",
-            data=pdf_bytes, file_name=f"TCGplayer_{h_data['order_no']}.pdf", mime="application/pdf", use_container_width=True,
+            data=final_pdf_bytes,
+            file_name=f"TCGplayer_{h_data['order_no']}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
             on_click=lambda: (supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute() if profile['tier'] != 'Unlimited' else None)
         )
