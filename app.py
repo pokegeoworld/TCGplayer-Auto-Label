@@ -12,10 +12,10 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (68PX TITLE & WIDE SIDEBAR) ---
+# --- 3. STYLING (68PX TITLE & 450PX SIDEBAR) ---
 st.markdown("""
     <style>
-    [data-testid="stSidebar"] { min-width: 400px; max-width: 400px; }
+    [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
     .hero-title {
         color: #1E3A8A;
         font-size: 68px;
@@ -59,7 +59,7 @@ def create_label_pdf(items):
     can.save(); packet.seek(0)
     return packet
 
-# --- 5. AUTHENTICATION (WIDE SIDEBAR WITH SIDE-BY-SIDE BUTTONS) ---
+# --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
@@ -68,17 +68,12 @@ if "user" not in st.session_state:
         e = st.text_input("Email")
         p = st.text_input("Password", type="password")
         col1, col2 = st.columns(2)
-        login_btn = col1.form_submit_button("Log In")
-        signup_btn = col2.form_submit_button("Sign Up")
-
-        if login_btn:
+        if col1.form_submit_button("Log In"):
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
-                st.session_state.user = res.user
-                st.rerun()
+                st.session_state.user = res.user; st.rerun()
             except: st.error("Login failed.")
-        
-        if signup_btn:
+        if col2.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
                 st.success("Success! Please Log In.")
@@ -91,8 +86,8 @@ profile = get_user_profile(user.id)
 
 if not profile:
     try:
-        # One-time profile creation if sync failed during signup
-        supabase.table("profiles").insert({"id": user.id, "credits": 5}).execute()
+        # Re-synced to 10 credits
+        supabase.table("profiles").insert({"id": user.id, "credits": 10}).execute()
         profile = get_user_profile(user.id)
     except Exception as err:
         st.error(f"Sync Error: {err}")
