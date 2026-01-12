@@ -12,9 +12,10 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (68PX TITLE) ---
+# --- 3. STYLING (68PX TITLE & WIDE SIDEBAR) ---
 st.markdown("""
     <style>
+    [data-testid="stSidebar"] { min-width: 400px; max-width: 400px; }
     .hero-title {
         color: #1E3A8A;
         font-size: 68px;
@@ -29,14 +30,15 @@ st.markdown("""
         text-align: center;
         margin-bottom: 30px;
     }
+    div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 4. FUNCTIONS ---
 def get_user_profile(user_id):
     try:
-        res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
-        return res.data
+        res = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        return res.data[0] if res.data else None
     except: return None
 
 def extract_tcg_data(uploaded_file):
@@ -46,7 +48,6 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
-    # 4x6 Dimensions
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
     can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
@@ -58,39 +59,49 @@ def create_label_pdf(items):
     can.save(); packet.seek(0)
     return packet
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION (WIDE SIDEBAR WITH SIDE-BY-SIDE BUTTONS) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
     with st.sidebar.form("auth"):
-        e, p = st.text_input("Email"), st.text_input("Password", type="password")
-        if st.form_submit_button("Log In"):
+        st.subheader("Account Access")
+        e = st.text_input("Email")
+        p = st.text_input("Password", type="password")
+        col1, col2 = st.columns(2)
+        login_btn = col1.form_submit_button("Log In")
+        signup_btn = col2.form_submit_button("Sign Up")
+
+        if login_btn:
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
-                st.session_state.user = res.user; st.rerun()
-            except: st.sidebar.error("Login failed.")
-        if st.form_submit_button("Sign Up"):
+                st.session_state.user = res.user
+                st.rerun()
+            except: st.error("Login failed.")
+        
+        if signup_btn:
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
-                st.sidebar.success("Success! Please log in.")
-            except: st.sidebar.error("Signup failed.")
+                st.success("Success! Please Log In.")
+            except: st.error("Signup failed.")
     st.stop()
 
 # --- 6. MAIN DASHBOARD ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# Profile Sync Logic
 if not profile:
     try:
+        # One-time profile creation if sync failed during signup
         supabase.table("profiles").insert({"id": user.id, "credits": 5}).execute()
         profile = get_user_profile(user.id)
-    except Exception as e:
-        st.error(f"Profile Sync Error: {e}")
+    except Exception as err:
+        st.error(f"Sync Error: {err}")
         st.stop()
 
+st.sidebar.write(f"Logged in: **{user.email}**")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
-if st.sidebar.button("Log Out"): st.session_state.clear(); st.rerun()
+if st.sidebar.button("Log Out"):
+    st.session_state.clear(); st.rerun()
 
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
