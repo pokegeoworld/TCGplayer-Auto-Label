@@ -14,12 +14,13 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (RESTORED PRICING CARDS & DOWNLOAD BUTTON) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .pricing-card { border: 2px solid #e1e4e8; padding: 30px 15px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 4px 10px rgba(0,0,0,0.05); min-height: 350px; display: flex; flex-direction: column; justify-content: center; }
+    .sub-header { background: #3B82F6; color: white; padding: 20px; border-radius: 12px; text-align: center; font-weight: 900; margin: 30px auto 20px auto; font-size: 32px !important; text-transform: uppercase; }
     
     .stDownloadButton > button {
         background-color: #15803d !important;
@@ -40,13 +41,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE MASTER PDF CREATOR (YOUR 18PT BOLD LAYOUT) ---
+# --- 4. THE MASTER PDF CREATOR (18PT BOLD LAYOUT) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
     
-    # Standardized Address (18PT BOLD)
     c.setFont("Helvetica-Bold", 18)
     c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
     c.drawString(0.5 * inch, height - 1.30 * inch, data['address'])
@@ -55,7 +55,6 @@ def create_label_pdf(data, items):
     c.setLineWidth(2)
     c.line(0.5 * inch, height - 1.9 * inch, 7.5 * inch, height - 1.9 * inch)
 
-    # Order Summary (11PT)
     c.setFont("Helvetica", 11)
     y_pos = height - 2.2 * inch
     c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
@@ -64,7 +63,6 @@ def create_label_pdf(data, items):
     c.drawString(0.5 * inch, y_pos - 0.66*inch, f"Seller Name: {data['seller']}")
     c.drawString(0.5 * inch, y_pos - 0.88*inch, f"Order Number: {data['order_no']}")
     
-    # Items Table Headers
     y_pos -= 1.3 * inch
     c.setFont("Helvetica-Bold", 12)
     c.drawString(0.5 * inch, y_pos, "Qty")
@@ -77,7 +75,6 @@ def create_label_pdf(data, items):
     c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos)
     y_pos -= 0.25 * inch
     
-    # Item Listing with Wrapping
     font_name, font_size = "Helvetica", 9.5
     c.setFont(font_name, font_size)
     total_qty, grand_total = 0, 0.0
@@ -85,23 +82,18 @@ def create_label_pdf(data, items):
     for item in items:
         wrapped_lines = simpleSplit(item['desc'], font_name, font_size, 5.3 * inch)
         needed_space = len(wrapped_lines) * 0.18 * inch
-        
         if y_pos - needed_space < 1.0 * inch:
             c.showPage(); y_pos = height - 0.5 * inch; c.setFont(font_name, font_size)
-
         c.drawString(0.5 * inch, y_pos, item['qty'])
         c.drawString(6.6 * inch, y_pos, item['price'])
         c.drawString(7.2 * inch, y_pos, item['total'])
-        
         for line in wrapped_lines:
             c.drawString(1.0 * inch, y_pos, line)
             y_pos -= 0.18 * inch
-        
         total_qty += int(item['qty'])
         grand_total += float(item['total'].replace('$', ''))
         y_pos -= 0.07 * inch
 
-    # Totals Section
     y_pos -= 0.3 * inch
     c.line(0.5 * inch, y_pos + 0.15 * inch, 7.8 * inch, y_pos + 0.15 * inch)
     c.setFont("Helvetica-Bold", 11)
@@ -152,9 +144,8 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 7. DATABASE HANDSHAKE (FIXED .single() ERROR) ---
+# --- 7. DATABASE HANDSHAKE ---
 user = st.session_state.user
-# Removed .single() to prevent crash
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
@@ -166,16 +157,29 @@ st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else prof
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 8. PRICING VIEW ---
+# --- 8. PRICING VIEW (RESTORED 5 TIERS) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
+    colA, colB = st.columns(2)
+    with colA:
         st.markdown('<div class="pricing-card"><h3>Free Trial</h3><p>5 Labels</p></div>', unsafe_allow_html=True)
-        if st.button("Activate"): supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
+        if st.button("Activate Free Trial"):
+            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
+    with colB:
+        st.markdown('<div class="pricing-card"><h3>Starter Pack</h3><p>10 Labels</p><p>$0.50</p></div>', unsafe_allow_html=True)
+        st.link_button("Buy Starter", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
+    
+    st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown('<div class="pricing-card"><h4>BASIC</h4><p>50 Labels</p><p>$1.49/mo</p></div>', unsafe_allow_html=True)
+        st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
     with c2:
-        st.markdown('<div class="pricing-card"><h3>Starter</h3><p>10 Labels</p></div>', unsafe_allow_html=True)
-        st.link_button("Buy $0.50", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
+        st.markdown('<div class="pricing-card"><h4>PRO</h4><p>150 Labels</p><p>$1.99/mo</p></div>', unsafe_allow_html=True)
+        st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
+    with c3:
+        st.markdown('<div class="pricing-card"><h4>UNLIMITED</h4><p>∞</p><p>$2.99/mo</p></div>', unsafe_allow_html=True)
+        st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
     st.stop()
 
 # --- 9. CREATOR VIEW ---
