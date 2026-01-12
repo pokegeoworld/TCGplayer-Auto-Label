@@ -13,7 +13,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (PROMINENT TITLE & UI FIXES) ---
+# --- 3. STYLING (PROMINENT BRANDING) ---
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -51,14 +51,11 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
-    # Explicit 4x6 Page Size
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
-    
     can.setFont("Helvetica-Bold", 14)
     can.drawString(x, y, "TCGplayer Auto Labels")
     y -= 0.5*inch
-    
     can.setFont("Helvetica", 11)
     for qty, name, set_name in items:
         if y < 0.5*inch:
@@ -77,7 +74,7 @@ if "user" not in st.session_state:
     st.markdown('<p class="hero-subtitle">Professional 4x6 Label Generation</p>', unsafe_allow_html=True)
     
     with st.sidebar.form("auth_form"):
-        st.subheader("Login / Sign Up")
+        st.subheader("Account Login")
         e = st.text_input("Email")
         p = st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
@@ -89,61 +86,57 @@ if "user" not in st.session_state:
             res = supabase.auth.sign_in_with_password({"email": e, "password": p})
             st.session_state.user = res.user
             st.rerun()
-        except: st.sidebar.error("Invalid email or password.")
+        except: st.sidebar.error("Invalid credentials.")
             
     if signup_btn:
         try:
-            res = supabase.auth.sign_up({"email": e, "password": p})
-            if res.user:
-                st.sidebar.success("Account created! You can now Log In.")
+            # Trigger in SQL now handles profile creation
+            supabase.auth.sign_up({"email": e, "password": p})
+            st.sidebar.success("Account created! Log in now.")
         except Exception as err: st.sidebar.error(f"Error: {str(err)}")
-    
-    st.info("👈 Please log in via the sidebar to start.")
     st.stop()
 
-# --- 6. MAIN INTERFACE (Logged In) ---
+# --- 6. MAIN INTERFACE ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# Force-create profile row if it's missing (Fixes 42501 error on the fly)
+# If profile is missing, it means the SQL trigger wasn't run or failed.
 if not profile:
-    try:
-        supabase.table("profiles").upsert({"id": user.id, "credits": 5, "tier": "free"}).execute()
-        profile = get_user_profile(user.id)
-    except Exception as db_err:
-        st.error(f"Database Sync Error. Ensure RLS SQL is run in Supabase. Details: {db_err}")
-        st.stop()
+    st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
+    st.error("Profile not found. Please run the SQL Trigger script in Supabase.")
+    if st.sidebar.button("Log Out"):
+        st.session_state.clear()
+        st.rerun()
+    st.stop()
 
-# Sidebar Stats
-st.sidebar.title("Your Account")
+# Sidebar
+st.sidebar.title("Account")
 st.sidebar.write(f"**Email:** {user.email}")
 st.sidebar.write(f"**Credits:** {profile.get('credits', 0)}")
 if st.sidebar.button("Log Out"):
     st.session_state.clear()
     st.rerun()
 
-# Prominent Main Title
+# Prominent Title
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip PDF", type="pdf")
 
-if uploaded_file:
-    if st.button("Generate 4x6 Labels"):
-        if profile.get('credits', 0) > 0 or profile.get('tier') == "unlimited":
-            items = extract_tcg_data(uploaded_file)
-            if items:
-                pdf_bytes = create_label_pdf(items)
-                try:
-                    # Update credits
-                    is_unlimited = profile.get('tier') == "unlimited"
-                    new_count = profile.get('credits', 0) if is_unlimited else profile.get('credits', 0) - 1
-                    supabase.table("profiles").update({"credits": new_count}).eq("id", user.id).execute()
-                    
-                    st.success(f"Success! Found {len(items)} items. Download your labels below.")
-                    st.download_button("📥 Download 4x6 PDF", pdf_bytes, "TCGplayer_Labels.pdf", "application/pdf")
-                except Exception as e:
-                    st.error(f"Credit Update Failed: {e}")
-            else:
-                st.error("Could not find any order items in this PDF.")
+if uploaded_file and st.button("Generate 4x6 Labels"):
+    if profile.get('credits', 0) > 0 or profile.get('tier') == "unlimited":
+        items = extract_tcg_data(uploaded_file)
+        if items:
+            pdf_bytes = create_label_pdf(items)
+            try:
+                # Deduct credits
+                new_count = profile.get('credits', 0) if profile.get('tier') == "unlimited" else profile.get('credits', 0) - 1
+                supabase.table("profiles").update({"credits": new_count}).eq("id", user.id).execute()
+                
+                st.success(f"Formatted {len(items)} items for 4x6 print.")
+                st.download_button("📥 Download PDF", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
+            except Exception as e:
+                st.error(f"Database Error: {e}")
         else:
-            st.error("Zero credits remaining. Please contact support.")
+            st.error("No card data found in PDF.")
+    else:
+        st.error("No credits remaining.")
