@@ -4,6 +4,8 @@ import io, re, base64
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
+from reportlab.platypus import Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="centered")
@@ -28,19 +30,24 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE CORRECTED PDF CREATOR ---
+# --- 4. THE PERFECTED PDF CREATOR (EXACT LAYOUT) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     
-    # Customer Info (18pt Font) - Top of Label
+    # Section 1: Address (18pt Bold)
     can.setFont("Helvetica-Bold", 18)
-    y = 5.7*inch
-    can.drawString(0.25*inch, y, data['buyer_name']); y -= 0.3*inch
-    can.drawString(0.25*inch, y, data['address']); y -= 0.3*inch
-    can.drawString(0.25*inch, y, data['city_state_zip']); y -= 0.4*inch
+    y = 5.7 * inch
+    can.drawString(0.25*inch, y, data['buyer_name']); y -= 0.25*inch
+    can.drawString(0.25*inch, y, data['address']); y -= 0.25*inch
+    can.drawString(0.25*inch, y, data['city_state_zip']); y -= 0.3*inch
     
-    # Metadata Sequence
+    # Dash Line 1
+    can.setDash(3, 3)
+    can.line(0.25*inch, y, 3.75*inch, y); y -= 0.25*inch
+    can.setDash()
+    
+    # Section 2: Metadata (10pt)
     can.setFont("Helvetica", 10)
     can.drawString(0.25*inch, y, f"Order Date: {data['date']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Shipping Method: {data['method']}"); y -= 0.15*inch
@@ -48,67 +55,59 @@ def create_label_pdf(data, items):
     can.drawString(0.25*inch, y, f"Seller Name: {data['seller']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Order Number: {data['order_no']}"); y -= 0.2*inch
     
-    # Separator Line
-    can.setLineWidth(1.5); can.line(0.25*inch, y, 3.75*inch, y); y -= 0.25*inch
+    # Dash Line 2
+    can.setDash(3, 3)
+    can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch
+    can.setDash()
     
-    # Packing List Header
-    can.setFont("Helvetica-Bold", 10)
-    can.drawString(0.25*inch, y, "QTY"); can.drawString(0.75*inch, y, "Description"); can.drawString(3.0*inch, y, "Price"); can.drawString(3.5*inch, y, "Total")
-    y -= 0.2*inch
-    
-    # Itemized List with Wrapping
-    can.setFont("Helvetica", 9)
+    # Section 3: Packing Table
+    styles = getSampleStyleSheet()
+    styleN = styles["BodyText"]
+    styleN.fontSize = 9
+    styleN.leading = 10
+
+    table_data = [["QTY", "Description", "Price", "Total"]]
     for item in items:
-        if y < 0.5*inch: 
-            can.showPage(); y = 5.7*inch; can.setFont("Helvetica", 9)
-        
-        can.drawString(0.25*inch, y, f"{item['qty']}x")
-        
-        desc, limit = item['desc'], 2.1*inch
-        words, line = desc.split(), ""
-        for word in words:
-            if can.stringWidth(line + word + " ", "Helvetica", 9) < limit: 
-                line += word + " "
-            else:
-                can.drawString(0.75*inch, y, line.strip()); y -= 0.12*inch; line = word + " "
-        can.drawString(0.75*inch, y, line.strip())
-        
-        can.drawString(3.0*inch, y, item['price']); can.drawString(3.5*inch, y, item['total']); y -= 0.25*inch
-        
-    can.save(); packet.seek(0); return packet
+        p_desc = Paragraph(item['desc'], styleN)
+        table_data.append([item['qty'], p_desc, item['price'], item['total']])
+    
+    table = Table(table_data, colWidths=[0.4*inch, 2.1*inch, 0.5*inch, 0.5*inch])
+    table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+    ]))
+    
+    w, h = table.wrapOn(can, 3.5*inch, y)
+    table.drawOn(can, 0.25*inch, y - h)
+    
+    can.save(); packet.seek(0)
+    return packet
 
 # --- 5. DATA EXTRACTION ---
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
-    
-    order_no = "Unknown"
-    order_match = re.search(r"Order Number:\s*([A-Z0-9\-]+)", text)
-    if order_match: order_no = order_match.group(1).strip()
-
     lines = [l.strip() for l in text.split('\n') if l.strip()]
-    data = {
-        'buyer_name': lines[0] if len(lines) > 0 else "N/A",
-        'address': lines[1] if len(lines) > 1 else "N/A",
-        'city_state_zip': lines[2] if len(lines) > 2 else "N/A",
-        'date': "01/12/2026", 
-        'method': "Standard", 
-        'seller': "ThePokeGeo",
-        'order_no': order_no
-    }
-    
-    date_match = re.search(r"Order Date:\s*([\d/]+)", text)
-    if date_match: data['date'] = date_match.group(1)
-    
-    items = []
-    item_pattern = r'"(\d+)"\s*,\s*"([\s\S]*?)"\s*,\s*"\s*\\\$([\d\.]+)"\s*,\s*"\s*\\\$([\d\.]+)"'
-    matches = re.findall(item_pattern, text)
-    for m in matches:
-        items.append({'qty': m[0], 'desc': m[1].replace('\n', ' ').strip(), 'price': f"${m[2]}", 'total': f"${m[3]}"})
-    
-    return data, items
+    try:
+        data = {
+            'buyer_name': lines[0],
+            'address': lines[1],
+            'city_state_zip': lines[2],
+            'date': re.search(r"Order Date:\s*([\d/]+)", text).group(1),
+            'method': "Standard (7-10 days)",
+            'seller': "ThePokeGeo",
+            'order_no': re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
+        }
+        items = []
+        item_matches = re.findall(r'"(\d+)"\s*,\s*"([\s\S]*?)"\s*,\s*"\s*\\\$([\d\.]+)"\s*,\s*"\s*\\\$([\d\.]+)"', text)
+        for m in item_matches:
+            items.append({'qty': m[0], 'desc': m[1].replace('\n', ' ').strip(), 'price': f"${m[2]}", 'total': f"${m[3]}"})
+        return data, items
+    except: return None, None
 
-# --- 6. STABLE AUTHENTICATION ---
+# --- 6. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
