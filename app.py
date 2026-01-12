@@ -54,11 +54,9 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
-    # Setting pagesize to 4x6 inches for thermal printers
     label_size = (4 * inch, 6 * inch)
     can = canvas.Canvas(packet, pagesize=label_size)
     
-    # Starting coordinates for 4x6 (0,0 is bottom left)
     x_offset = 0.25 * inch
     y_offset = 5.75 * inch
     line_height = 0.25 * inch
@@ -69,7 +67,6 @@ def create_label_pdf(items):
     
     can.setFont("Helvetica", 10)
     for qty, name, set_name in items:
-        # If text goes near the bottom of the 6-inch label, start a new page
         if y_offset < 0.5 * inch:
             can.showPage()
             y_offset = 5.75 * inch
@@ -83,11 +80,9 @@ def create_label_pdf(items):
     packet.seek(0)
     return packet
 
-# --- 4. AUTHENTICATION SIDEBAR ---
-st.sidebar.title("Settings & Account")
-
+# --- 4. AUTHENTICATION LOGIC ---
 if "user" not in st.session_state:
-    st.sidebar.subheader("Login / Signup")
+    st.sidebar.title("Login / Signup")
     email = st.sidebar.text_input("Email")
     password = st.sidebar.text_input("Password", type="password")
     
@@ -106,9 +101,13 @@ if "user" not in st.session_state:
             st.sidebar.success("Check email or Log In.")
         except Exception:
             st.sidebar.error("Signup failed.")
+    
+    # Show welcome message if not logged in
+    st.markdown('<p class="title-text">Welcome to TCGplayer Labeler</p>', unsafe_allow_html=True)
+    st.info("Please log in via the sidebar to access the label generator.")
     st.stop()
 
-# --- 5. LOGGED-IN VIEW ---
+# --- 5. MAIN INTERFACE (ONLY SHOWN IF LOGGED IN) ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
@@ -117,17 +116,20 @@ if profile:
     credits = profile.get("credits", 0)
     used = profile.get("used_this_month", 0)
     
+    # Sidebar Profile Info
+    st.sidebar.title("Your Account")
     st.sidebar.write(f"Logged in: **{user.email}**")
     st.sidebar.write(f"Plan: **{tier.upper()}**")
+    st.sidebar.write(f"Credits Remaining: **{credits}**")
     
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
 
-    # --- MAIN APP INTERFACE ---
+    # App Main Body
     st.markdown('<p class="title-text">TCGplayer 4x6 Label Creator</p>', unsafe_allow_html=True)
     
-    uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
+    uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip PDF", type="pdf")
     
     if uploaded_file:
         if st.button("Generate 4x6 Labels"):
@@ -144,7 +146,7 @@ if profile:
                             "credits": credits if tier == "unlimited" else credits - 1
                         }).eq("id", user.id).execute()
                         
-                        st.success(f"Parsed {len(data)} items for 4x6 print.")
+                        st.success(f"Successfully parsed {len(data)} items for 4x6 print.")
                         st.download_button(
                             label="📥 Download 4x6 PDF",
                             data=pdf_output,
@@ -152,6 +154,8 @@ if profile:
                             mime="application/pdf"
                         )
                     else:
-                        st.error("No items found in PDF.")
+                        st.error("No items found in PDF. Please ensure this is a standard TCGplayer Packing Slip.")
             else:
-                st.error("No credits remaining.")
+                st.error("No credits remaining. Please upgrade your account.")
+else:
+    st.error("Could not load user profile. Please contact support.")
