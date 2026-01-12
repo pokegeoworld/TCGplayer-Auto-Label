@@ -88,7 +88,8 @@ def create_label_pdf(data, items):
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    u_email, u_pass = st.sidebar.text_input("Email"), st.sidebar.text_input("Password", type="password")
+    u_email = st.sidebar.text_input("Email")
+    u_pass = st.sidebar.text_input("Password", type="password")
     l_col, r_col = st.sidebar.columns(2)
     if l_col.button("Log In"):
         try:
@@ -96,31 +97,49 @@ if "user" not in st.session_state:
             if res.user:
                 st.session_state.user = res.user
                 st.rerun()
-        except: st.sidebar.error("Login Failed.")
+        except Exception:
+            st.sidebar.error("Login Failed. Check credentials or try again.")
     if r_col.button("Sign Up"):
         try:
             supabase.auth.sign_up({"email": u_email, "password": u_pass})
-            st.sidebar.success("Account Created! Click Log In.")
-        except: st.sidebar.error("Signup failed.")
+            st.sidebar.success("Account Created! Check your email (if confirmation required), then click Log In.")
+        except Exception:
+            st.sidebar.error("Signup failed. Email may already exist or password too weak.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (Trigger should create profile automatically) ---
+# --- 6. DATABASE HANDSHAKE (Trigger should auto-create profile; fallback only if needed) ---
 user = st.session_state.user
 
-profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+with st.spinner("Loading your profile..."):
+    profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 
-if profile_res.data:
-    profile = profile_res.data[0]
-else:
-    # Rare fallback: trigger may not have fired yet (e.g. immediate page load after signup)
-    st.warning("Profile not found — creating it now as fallback...")
-    try:
-        supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
-        profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+    if profile_res.data:
         profile = profile_res.data[0]
-    except Exception as e:
-        st.error(f"Failed to create fallback profile: {str(e)}\nPlease log out and back in, or contact support.")
-        st.stop()
+    else:
+        st.warning("Profile not found — automatic creation may be delayed. Attempting fallback...")
+        try:
+            supabase.table("profiles").insert({
+                "id": user.id,
+                "credits": 0,
+                "tier": "None"
+            }).execute()
+            # Fetch again after insert
+            profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+            if profile_res.data:
+                profile = profile_res.data[0]
+            else:
+                raise Exception("Insert succeeded but profile still not found.")
+        except Exception as e:
+            st.error(
+                f"Failed to create fallback profile: {str(e)}\n\n"
+                "This is usually due to Row Level Security (RLS) settings.\n"
+                "Please run the following SQL in Supabase SQL Editor:\n\n"
+                "CREATE POLICY \"Users can create their own profile\"\n"
+                "ON public.profiles FOR INSERT\n"
+                "TO authenticated WITH CHECK (auth.uid() = id);\n\n"
+                "Then log out and back in. If issue persists, contact support."
+            )
+            st.stop()
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
@@ -161,36 +180,51 @@ if profile['credits'] == 0 and profile['tier'] == "None":
 
 # --- 9. DYNAMIC CREATOR VIEW ---
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
+
 uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
+
 if uploaded_file:
-    reader = PdfReader(uploaded_file)
-    text = "".join([p.extract_text() + "\n" for p in reader.pages])
-    lines = [l.strip() for l in text.split('\n') if l.strip()]
-   
     try:
+        reader = PdfReader(uploaded_file)
+        text = "".join([page.extract_text() + "\n" for page in reader.pages])
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+
         order_no = re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
         order_date = re.search(r"(\d{2}/\d{2}/\d{4})", text).group(1)
         ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line or "Shipping Address:" in line)
-       
+
         data = {
             'buyer_name': lines[ship_idx + 1],
             'address': lines[ship_idx + 2],
             'city_state_zip': lines[ship_idx + 3],
-            'date': order_date, 'order_no': order_no,
-            'method': "Standard (7-10 days)", 'seller': "ThePokeGeo"
+            'date': order_date,
+            'order_no': order_no,
+            'method': "Standard (7-10 days)",
+            'seller': "ThePokeGeo"
         }
+
         items = []
         item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, re.DOTALL)
         for qty, desc, price, total in item_rows:
-            items.append({'qty': qty, 'desc': desc.replace('\n', ' ').strip(), 'price': f"${price}", 'total': f"${total}"})
+            items.append({
+                'qty': qty,
+                'desc': desc.replace('\n', ' ').strip(),
+                'price': f"${price}",
+                'total': f"${total}"
+            })
+
         pdf_bytes = create_label_pdf(data, items)
+
+        def decrement_credits():
+            supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
+
         st.download_button(
             label=f"📥 DOWNLOAD LABEL: {order_no}",
             data=pdf_bytes,
             file_name=f"TCGplayer_{order_no}.pdf",
             mime="application/pdf",
             use_container_width=True,
-            on_click=lambda: supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
+            on_click=decrement_credits
         )
     except Exception as e:
-        st.error(f"Error reading file: {str(e)}\nEnsure it is a valid TCGplayer packing slip.")
+        st.error(f"Error processing PDF: {str(e)}\nMake sure this is a valid TCGplayer packing slip PDF.")
