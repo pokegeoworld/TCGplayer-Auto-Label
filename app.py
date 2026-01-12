@@ -12,42 +12,34 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (ULTRA-LARGE PRICING TEXT) ---
+# --- 3. STYLING (FORCE LARGE FONTS & BUTTONS) ---
 st.markdown("""
     <style>
-    [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
-    .hero-title { color: #1E3A8A; font-size: 68px; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
-    .hero-subtitle { color: #4B5563; font-size: 20px; text-align: center; margin-bottom: 30px; }
+    [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
+    .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     
-    /* Massive Pricing Cards */
+    /* Pricing Card - Massive Text */
     .pricing-card { 
-        border: 2px solid #e1e4e8; 
-        padding: 40px 20px; 
-        border-radius: 15px; 
-        text-align: center; 
-        background: white; 
-        box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
-        min-height: 360px;
+        border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; 
+        text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
     }
-    
     .sub-header { 
-        background: linear-gradient(90deg, #1E3A8A, #3B82F6); 
-        color: white; padding: 20px; border-radius: 12px; 
-        text-align: center; font-weight: 900; margin: 45px auto 25px auto; 
-        font-size: 32px; max-width: 900px; 
+        background: linear-gradient(90deg, #1E3A8A, #3B82F6); color: white; 
+        padding: 20px; border-radius: 12px; text-align: center; font-weight: 900; 
+        margin: 45px auto 25px auto; font-size: 35px !important; 
     }
     
-    /* ULTRA LARGE FONT SIZES */
-    .big-stat { font-size: 54px; font-weight: 900; color: #1E3A8A; margin: 15px 0 0 0; line-height: 1; }
-    .label-text { font-size: 24px; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
-    .small-price { font-size: 28px; color: #374151; font-weight: 800; margin-bottom: 30px; }
-    .tier-name { font-size: 22px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: 2px; }
+    .big-stat { font-size: 75px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
+    .label-text { font-size: 28px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 5px; }
+    .small-price { font-size: 30px !important; color: #374151; font-weight: 800; margin-bottom: 25px; }
+    .tier-name { font-size: 24px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; }
     
-    .stButton>button { width: 100%; border-radius: 10px; font-weight: 800; height: 60px; font-size: 22px; background-color: #1E3A8A; color: white; }
+    /* Force Buttons */
+    .stButton>button { width: 100% !important; border-radius: 10px; font-weight: 800; height: 60px; font-size: 22px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. CORE LOGIC FUNCTIONS ---
+# --- 4. FUNCTIONS ---
 def get_user_profile(user_id):
     try:
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -92,49 +84,50 @@ def trigger_auto_download(pdf_bytes, filename):
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION (ISOLATED FOR 1-CLICK SUCCESS) ---
+# --- 5. AUTHENTICATION (SIDE-BY-SIDE BUTTONS RESTORED) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
     with st.sidebar.form("auth"):
         e, p = st.text_input("Email"), st.text_input("Password", type="password")
-        if st.form_submit_button("Log In"):
+        c1, c2 = st.columns(2)
+        if c1.form_submit_button("Log In"):
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
                 if res.user:
                     st.session_state.user = res.user
-                    st.rerun() # Immediate rerun to lock session
+                    st.rerun() # Fixed: Single-click login
             except: st.error("Login failed.")
-        if st.form_submit_button("Sign Up"):
+        if c2.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
-                st.success("Account created! Please Log In.")
+                st.success("Signed up! Please Log In.")
             except: st.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE SYNC ---
+# --- 6. MAIN APP LOGIC ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 if not profile:
     try:
         supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
         profile = get_user_profile(user.id)
-    except: st.error("Sync Error."); st.stop()
+    except: st.error("Database sync failed."); st.stop()
 
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (ULTRA VISIBLE) ---
+# --- 7. PRICING VIEW (MASSIVE FONTS) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Free Trial</p><p class="big-stat">5</p><p class="label-text">Auto Labels</p><p class="small-price">$0 One-Time</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Free Trial</p><p class="big-stat">5</p><p class="label-text">Auto Labels</p><p class="small-price">$0</p></div>', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
             supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute()
             st.rerun()
     with colB:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Auto Labels</p><p class="small-price">$0.50 One-Time</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Auto Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/test_5kQfZjgJ67x66ot5kW5J601")
 
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
