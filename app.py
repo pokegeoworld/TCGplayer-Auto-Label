@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (RESTORED HIGH-IMPACT LAYOUT) ---
+# --- 3. STYLING (HIGH-IMPACT PRICING & PRO DOWNLOAD BUTTON) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -121,26 +121,31 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 7. DATABASE HANDSHAKE (REINFORCED) ---
+# --- 7. DATABASE HANDSHAKE ---
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
-# Default for brand new users: Tier 'None' and 0 Credits
+# Default for brand new users
 if not profile:
     supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
     profile = {"id": user.id, "credits": 0, "tier": "None"}
 
+# Fix: If credits exist, ensure tier is not displayed as 'None' or 'New' incorrectly
+display_tier = profile['tier']
+if profile['credits'] > 0 and display_tier in ["None", "New"]:
+    display_tier = "Active"
+
 st.sidebar.title("🎴 Account Controls")
 st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
-st.sidebar.write(f"Current Tier: **{profile['tier']}**")
+st.sidebar.write(f"Current Tier: **{display_tier}**")
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Billing Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 8. SMART PRICING GATE (NEW USER / NO CREDITS) ---
-# Only show plan options if they have 0 credits AND no active plan tier
-if profile.get('credits') == 0 and profile.get('tier') == 'None':
+# --- 8. SMART PRICING GATE (ONLY FOR 0 CREDITS & NO PLAN) ---
+# If user has credits, they bypass this screen entirely
+if profile.get('credits') == 0 and profile.get('tier') in ["None", "New"]:
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
