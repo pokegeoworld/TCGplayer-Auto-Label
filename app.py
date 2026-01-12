@@ -7,23 +7,12 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 
 # --- 1. PAGE CONFIGURATION & STYLING ---
-st.set_page_config(
-    page_title="TCGplayer Auto Label", 
-    page_icon="🎴",
-    layout="centered",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="centered")
 
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
-    .title-text {
-        color: #1E3A8A;
-        font-size: 32px;
-        font-weight: bold;
-        text-align: center;
-        padding-bottom: 20px;
-    }
+    .title-text { color: #1E3A8A; font-size: 32px; font-weight: bold; text-align: center; padding-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -50,17 +39,16 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
-    label_size = (4 * inch, 6 * inch)
-    can = canvas.Canvas(packet, pagesize=label_size)
-    x_offset, y_offset, line_height = 0.25 * inch, 5.75 * inch, 0.25 * inch
+    can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
+    x_offset, y_offset, line_height = 0.25*inch, 5.75*inch, 0.25*inch
     can.setFont("Helvetica-Bold", 12)
     can.drawString(x_offset, y_offset, "TCGplayer Label")
-    y_offset -= 0.4 * inch
+    y_offset -= 0.4*inch
     can.setFont("Helvetica", 10)
     for qty, name, set_name in items:
-        if y_offset < 0.5 * inch:
+        if y_offset < 0.5*inch:
             can.showPage()
-            y_offset = 5.75 * inch
+            y_offset = 5.75*inch
             can.setFont("Helvetica", 10)
         can.drawString(x_offset, y_offset, f"[{qty}x] {name} - {set_name}")
         y_offset -= line_height
@@ -85,21 +73,18 @@ if "user" not in st.session_state:
             
     if col2.button("Sign Up"):
         try:
-            # 1. Create Auth User
             res = supabase.auth.sign_up({"email": email, "password": password})
             if res.user:
-                # 2. Immediately create Profile record
-                supabase.table("profiles").insert({
-                    "id": res.user.id,
-                    "tier": "free",
-                    "credits": 5,
-                    "used_this_month": 0
-                }).execute()
-                st.sidebar.success("Account created! Please Log In.")
+                # Use a try block for the insert in case RLS is blocking it
+                try:
+                    supabase.table("profiles").upsert({"id": res.user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
+                    st.sidebar.success("Account created! Please Log In.")
+                except Exception as db_err:
+                    st.sidebar.error("Auth successful, but Database rejected the profile. Check RLS policies.")
         except Exception as e:
             st.sidebar.error(f"Signup failed: {str(e)}")
     
-    st.markdown('<p class="title-text">Welcome to TCGplayer Labeler</p>', unsafe_allow_html=True)
+    st.markdown('<p class="title-text">TCGplayer 4x6 Labeler</p>', unsafe_allow_html=True)
     st.info("Please log in via the sidebar to access the label generator.")
     st.stop()
 
@@ -107,22 +92,19 @@ if "user" not in st.session_state:
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# If profile still doesn't exist (legacy users), create it now
+# If profile is missing, try to create it once
 if user and not profile:
-    supabase.table("profiles").insert({
-        "id": user.id,
-        "tier": "free",
-        "credits": 5,
-        "used_this_month": 0
-    }).execute()
-    profile = get_user_profile(user.id)
+    try:
+        supabase.table("profiles").upsert({"id": user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
+        profile = get_user_profile(user.id)
+    except Exception:
+        st.error("Permissions Error: Your Supabase account is blocking database updates. Please check your RLS policies.")
+        st.stop()
 
 if profile:
     tier, credits, used = profile.get("tier", "free"), profile.get("credits", 0), profile.get("used_this_month", 0)
-    
     st.sidebar.title("Your Account")
     st.sidebar.write(f"Logged in: **{user.email}**")
-    st.sidebar.write(f"Plan: **{tier.upper()}**")
     st.sidebar.write(f"Credits: **{credits}**")
     
     if st.sidebar.button("Log Out"):
@@ -137,13 +119,15 @@ if profile:
             data = extract_tcg_data(uploaded_file)
             if data:
                 pdf_output = create_label_pdf(data)
-                supabase.table("profiles").update({
-                    "used_this_month": used + 1,
-                    "credits": credits if tier == "unlimited" else credits - 1
-                }).eq("id", user.id).execute()
-                
-                st.success(f"Parsed {len(data)} items for 4x6.")
-                st.download_button("📥 Download 4x6 PDF", pdf_output, "TCG_4x6.pdf", "application/pdf")
+                try:
+                    supabase.table("profiles").update({
+                        "used_this_month": used + 1,
+                        "credits": credits if tier == "unlimited" else credits - 1
+                    }).eq("id", user.id).execute()
+                    st.success(f"Parsed {len(data)} items.")
+                    st.download_button("📥 Download 4x6 PDF", pdf_output, "TCG_4x6.pdf", "application/pdf")
+                except Exception:
+                    st.error("Failed to update credits in database. Check RLS settings.")
             else:
                 st.error("No items found in PDF.")
         else:
