@@ -18,7 +18,7 @@ st.markdown("""
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .pricing-card { border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); min-height: 350px; display: flex; flex-direction: column; justify-content: center; margin-bottom: 10px; }
-    .sub-header { background: linear-gradient(90deg, #1E3A8A, #3B82F6); color: white; padding: 20px; border-radius: 12px; text-align: center; font-weight: 900; margin: 45px auto 25px auto; font-size: 35px !important; }
+    .sub-header { background: linear-gradient(90deg, #1E3A8A, #3B82F6); color: white; padding: 20px; border-radius: 12px; text-align: center; font-weight: 900; margin: 40px auto 25px auto; font-size: 35px !important; }
     .free-trial-title { font-size: 55px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 15px; }
     .big-stat { font-size: 85px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 32px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
@@ -28,30 +28,23 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. PERFECTED PDF FUNCTION (AS REQUESTED) ---
+# --- 4. PERFECTED PDF FUNCTION ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    
-    # Customer Info (18pt Font)
     can.setFont("Helvetica-Bold", 18)
     y = 5.7*inch
     can.drawString(0.25*inch, y, data['name']); y -= 0.3*inch
     can.drawString(0.25*inch, y, data['address']); y -= 0.3*inch
     can.drawString(0.25*inch, y, data['city_state_zip']); y -= 0.4*inch
-    
-    # Metadata Section
     can.setFont("Helvetica", 10)
     meta = [f"Order Date: {data['date']}", f"Shipping Method: {data['method']}", f"Buyer Name: {data['name']}", f"Seller Name: {data['seller']}", f"Order Number: {data['order_no']}"]
     for line in meta:
         can.drawString(0.25*inch, y, line); y -= 0.15*inch
-    
-    # Separator & Packing List
     y -= 0.1*inch
     can.setLineWidth(1.5); can.line(0.25*inch, y, 3.75*inch, y); y -= 0.25*inch
     can.setFont("Helvetica-Bold", 11)
     can.drawString(0.25*inch, y, "QTY"); can.drawString(0.75*inch, y, "Description"); can.drawString(3.0*inch, y, "Price"); can.drawString(3.5*inch, y, "Total"); y -= 0.2*inch
-    
     can.setFont("Helvetica", 9)
     for item in items:
         if y < 0.5*inch: can.showPage(); y = 5.7*inch; can.setFont("Helvetica", 9)
@@ -88,19 +81,20 @@ def extract_tcg_data(uploaded_file):
         return data, items
     except: return None, None
 
-# --- 6. AUTHENTICATION (REINFORCED SESSION LOCK) ---
+# --- 6. AUTHENTICATION (GLITCH-FREE LOCK) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    u_email = st.sidebar.text_input("Email", key="login_email")
-    u_pass = st.sidebar.text_input("Password", type="password", key="login_pass")
+    u_email = st.sidebar.text_input("Email", key="u_email")
+    u_pass = st.sidebar.text_input("Password", type="password", key="u_pass")
     l_col, r_col = st.sidebar.columns(2)
+    
     if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
             if res.user:
                 st.session_state.user = res.user
-                st.rerun() 
+                st.rerun() # Fixed: Single-click login
         except: st.sidebar.error("Login failed.")
     if r_col.button("Sign Up"):
         try:
@@ -123,7 +117,7 @@ if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="free-trial-title">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="free-trial-title">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
         st.markdown('<div class="top-row-btn">', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
             supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", st.session_state.user.id).execute()
