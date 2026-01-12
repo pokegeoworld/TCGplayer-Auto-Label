@@ -179,4 +179,3 @@ if uploaded_file:
                 b64 = base64.b64encode(pdf_result.getvalue()).decode()
                 st.components.v1.html(f'<a id="autodl" href="data:application/pdf;base64,{b64}" download="TCGplayer_{h_data["order_no"]}.pdf"></a><script>document.getElementById("autodl").click();</script>', height=0)
             st.download_button("📥 Download Label", data=pdf_result, file_name=f"TCGplayer_{h_data['order_no']}.pdf", mime="application/pdf", use_container_width=True)
-            
