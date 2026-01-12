@@ -15,7 +15,12 @@ key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
 # --- 2. CONFIGURATION ---
-st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴")
+# This forces the sidebar to stay open so users see the Login/Balance immediately
+st.set_page_config(
+    page_title="TCGplayer Auto Label", 
+    page_icon="🎴",
+    initial_sidebar_state="expanded"
+)
 
 # --- 3. AUTHENTICATION & BALANCES ---
 st.sidebar.title("Settings & Account")
@@ -48,8 +53,7 @@ if "user" not in st.session_state:
     # SIGN UP BUTTON
     if col2.button("Sign Up"):
         try:
-            # This creates the user in Auth and triggers the 'handle_new_user' 
-            # function we wrote in SQL to give them 5 free credits.
+            # This triggers the 'handle_new_user' SQL function to give 5 free credits
             res = supabase.auth.sign_up({"email": email, "password": password})
             st.sidebar.success("Account created! You can now Log In.")
         except Exception:
@@ -75,14 +79,14 @@ if profile:
         can_print = True
     elif tier == "standard":
         left = 150 - used
-        st.sidebar.info(f"Labels: {max(0, left)} / 150")
+        st.sidebar.info(f"Monthly Labels: {max(0, left)} / 150")
         can_print = left > 0
     elif tier == "basic":
         left = 50 - used
-        st.sidebar.info(f"Labels: {max(0, left)} / 50")
+        st.sidebar.info(f"Monthly Labels: {max(0, left)} / 50")
         can_print = left > 0
     else:
-        # One-time credits (Starter Pack or Free Trial)
+        # Starter Credits (Free Trial or purchased $0.50 packs)
         st.sidebar.info(f"Starter Credits: {credits}")
         can_print = credits > 0
 
@@ -103,7 +107,6 @@ st.write("Upload your packing slip to generate organized pull labels.")
 uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip (PDF)", type="pdf")
 
 if uploaded_file is not None:
-    # This button only appears/works if 'can_print' is True
     if st.button("Generate & Print Labels"):
         
         # 1. Update Database (Charge the user for usage)
@@ -114,8 +117,10 @@ if uploaded_file is not None:
             # Add 1 to their monthly usage count
             supabase.table("profiles").update({"used_this_month": used + 1}).eq("id", user.id).execute()
         
-        # 2. SUCCESS FEEDBACK
+        # 2. PDF PROCESSING
+        # [Your existing PDF logic should remain here]
+        
         st.success("Label processed! Your balance has been updated.")
         
         # Trigger a rerun so the sidebar balance updates immediately
-        st.rerun()   
+        st.rerun()
