@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (HIGH-IMPACT PRICING & PRO DOWNLOAD BUTTON) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -124,7 +124,7 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 7. DATABASE HANDSHAKE ---
+# --- 7. SIDEBAR ALWAYS-ON (FIXED) ---
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
@@ -133,8 +133,15 @@ if not profile:
     supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
     profile = {"id": user.id, "credits": 5, "tier": "New"}
 
-# --- 8. SMART PRICING GATE (FIXED) ---
-# Only show pricing if user is brand new and has not selected any tier yet
+# THE SIDEBAR IS NOW INDEPENDENT OF THE PRICING GATE
+st.sidebar.title("🎴 Account Controls")
+st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
+st.sidebar.write(f"Current Tier: **{profile['tier']}**")
+st.sidebar.markdown("---")
+st.sidebar.link_button("⚙️ Billing Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
+if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+
+# --- 8. PRICING GATE (MAIN PAGE ONLY) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
@@ -149,21 +156,14 @@ if profile.get('tier') == 'New':
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
-        st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
+        st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
     with c2:
-        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
-        st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
+        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
     with c3:
-        st.markdown('<div class="pricing-card"><p class="tier-name">UNLIMITED</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
-        st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
+        st.markdown('<div class="pricing-card"><p class="tier-name">UNLIMITED</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
     st.stop()
 
 # --- 9. CREATOR VIEW ---
-st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
-st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
-if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
-
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
