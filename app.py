@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-import io, re
+import io, re, base64
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (68PX TITLE & WIDE SIDEBAR) ---
+# --- 3. STYLING (68PX TITLE & 450PX SIDEBAR) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
@@ -43,9 +43,7 @@ def get_user_profile(user_id):
 
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() + "\n"
+    text = "".join([p.extract_text() + "\n" for p in reader.pages])
     order_match = re.search(r"Order\s*Number:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
     items = []
@@ -63,18 +61,24 @@ def create_label_pdf(items):
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
     can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
-    y -= 0.5*inch
-    can.setFont("Helvetica", 11)
+    y -= 0.5*inch; can.setFont("Helvetica", 11)
     for qty, desc in items:
-        if y < 0.8*inch:
+        if y < 0.5*inch:
             can.showPage(); y = 5.75*inch; can.setFont("Helvetica", 11)
         clean_desc = " ".join(desc.split())
         can.drawString(x, y, f"[{qty}x] {clean_desc}"); y -= lh
-    can.setFont("Helvetica-Oblique", 8); can.setStrokeColorRGB(0.8, 0.8, 0.8)
-    can.line(0.25*inch, 0.5*inch, 3.75*inch, 0.5*inch)
-    can.drawString(0.25*inch, 0.35*inch, "Return: 36 Michael Anthony ln, Depew NY 14043")
     can.save(); packet.seek(0)
     return packet
+
+def trigger_auto_download(pdf_bytes, filename):
+    b64 = base64.b64encode(pdf_bytes.getvalue()).decode()
+    dl_link = f"""
+    <a id="autodl" href="data:application/pdf;base64,{b64}" download="{filename}"></a>
+    <script>
+    document.getElementById('autodl').click();
+    </script>
+    """
+    st.components.v1.html(dl_link, height=0)
 
 # --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
@@ -100,7 +104,6 @@ if "user" not in st.session_state:
 # --- 6. MAIN DASHBOARD ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
-
 if not profile:
     try:
         supabase.table("profiles").insert({"id": user.id, "credits": 10}).execute()
@@ -115,28 +118,24 @@ if st.sidebar.button("Log Out"):
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Step 1: Upload TCGplayer PDF", type="pdf")
+uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
     if profile['credits'] > 0:
-        # Check if we already generated the PDF to avoid extra processing
         items, order_no = extract_tcg_data(uploaded_file)
         if items:
             pdf_result = create_label_pdf(items)
             filename = f"TCGplayer_{order_no}.pdf"
             
-            st.success(f"Label ready for Order {order_no}")
-            
-            # Use the data directly in the download button. 
-            # Note: We deduct the credit BEFORE the button appears to ensure the state is locked.
-            if f"downloaded_{order_no}" not in st.session_state:
+            if f"last_dl_{order_no}" not in st.session_state:
                 new_c = profile['credits'] - 1
                 supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
-                st.session_state[f"downloaded_{order_no}"] = True
-                st.rerun()
+                st.session_state[f"last_dl_{order_no}"] = True
+                trigger_auto_download(pdf_result, filename)
+                st.success(f"Deducted 1 credit. Downloading {filename}...")
 
             st.download_button(
-                label="Step 2: Click to Download Label",
+                label="📥 Download Didn't Start? Click Here",
                 data=pdf_result,
                 file_name=filename,
                 mime="application/pdf",
