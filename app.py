@@ -93,7 +93,7 @@ if "user" not in st.session_state:
             
     if signup_btn:
         try:
-            # Note: Signup relies on the Database Trigger you set up in Supabase
+            # Signup relies on the Database Trigger in Supabase
             supabase.auth.sign_up({"email": e, "password": p})
             st.sidebar.success("Account created! You can now Log In.")
         except Exception as err: st.sidebar.error(f"Error: {str(err)}")
@@ -105,10 +105,10 @@ if "user" not in st.session_state:
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# If profile is missing, notify user to check the Database Trigger
 if not profile:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-    st.error("Profile not found. Please ensure the Database Trigger and Function are set up in Supabase.")
+    st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
+    st.error("Profile not found. If this is an old account, please manually add a row to the 'profiles' table in Supabase.")
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
