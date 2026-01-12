@@ -84,7 +84,7 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (FIXED LOGIN GLITCH) ---
+# --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -104,31 +104,23 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (FIXED DUPLICATE KEY CRASH) ---
+# --- 6. DATABASE HANDSHAKE (Trigger should create profile automatically) ---
 user = st.session_state.user
 
-# First try to fetch existing profile
-profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-
-if not profile_res.data:
-    # Profile doesn't exist → try to create it
-    try:
-        supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
-    except Exception as e:
-        # Ignore duplicate key violation (most common cause of failure here)
-        if "duplicate" not in str(e).lower() and "unique" not in str(e).lower():
-            st.error(f"Profile creation failed: {str(e)}")
-            st.stop()
-
-# Now fetch the profile again (it should exist now, whether we inserted or it already was there)
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 
 if profile_res.data:
     profile = profile_res.data[0]
 else:
-    # Very rare fallback — should almost never hit this
-    st.error("Could not load or create your profile. Please try logging out and back in.")
-    st.stop()
+    # Rare fallback: trigger may not have fired yet (e.g. immediate page load after signup)
+    st.warning("Profile not found — creating it now as fallback...")
+    try:
+        supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
+        profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+        profile = profile_res.data[0]
+    except Exception as e:
+        st.error(f"Failed to create fallback profile: {str(e)}\nPlease log out and back in, or contact support.")
+        st.stop()
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
@@ -148,7 +140,8 @@ if profile['credits'] == 0 and profile['tier'] == "None":
     with colA:
         st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
-            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
+            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute()
+            st.rerun()
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
@@ -156,11 +149,14 @@ if profile['credits'] == 0 and profile['tier'] == "None":
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
+        st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
+        st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
     with c2:
-        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
+        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
+        st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
     with c3:
-        st.markdown('<div class="pricing-card"><p class="tier-name">UNLIMITED</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
+        st.markdown('<div class="pricing-card"><p class="tier-name">UNLIMITED</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
+        st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
     st.stop()
 
 # --- 9. DYNAMIC CREATOR VIEW ---
@@ -190,8 +186,11 @@ if uploaded_file:
         pdf_bytes = create_label_pdf(data, items)
         st.download_button(
             label=f"📥 DOWNLOAD LABEL: {order_no}",
-            data=pdf_bytes, file_name=f"TCGplayer_{order_no}.pdf", mime="application/pdf", use_container_width=True,
-            on_click=lambda: (supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute())
+            data=pdf_bytes,
+            file_name=f"TCGplayer_{order_no}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            on_click=lambda: supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
         )
-    except:
-        st.error("Error reading file. Ensure it is a valid TCGplayer packing slip.")
+    except Exception as e:
+        st.error(f"Error reading file: {str(e)}\nEnsure it is a valid TCGplayer packing slip.")
