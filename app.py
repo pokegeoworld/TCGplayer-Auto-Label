@@ -14,18 +14,13 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (UNCHANGED STABLE LAYOUT) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .pricing-card { border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); min-height: 380px; display: flex; flex-direction: column; justify-content: center; }
     .sub-header { background: #3B82F6; color: white; padding: 25px; border-radius: 12px; text-align: center; font-weight: 900; margin: 40px auto 25px auto; font-size: 40px !important; text-transform: uppercase; }
-    .free-trial-large { font-size: 65px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 20px; }
-    .big-stat { font-size: 90px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
-    .label-text { font-size: 35px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 15px; }
-    .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
-    .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
     
     .stDownloadButton > button {
         background-color: #15803d !important;
@@ -50,7 +45,7 @@ st.markdown("""
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    can.setFont("Helvetica-Bold", 14) 
+    can.setFont("Helvetica-Bold", 14) # 14pt Address
     y = 5.7 * inch
     can.drawString(0.25*inch, y, data['buyer_name']); y -= 0.22*inch
     can.drawString(0.25*inch, y, data['address']); y -= 0.22*inch
@@ -71,7 +66,7 @@ def create_label_pdf(data, items):
     table = Table(table_data, colWidths=[0.35*inch, 2.2*inch, 0.45*inch, 0.5*inch])
     table.setStyle(TableStyle([('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),('VALIGN', (0,0), (-1,-1), 'TOP'),('BOTTOMPADDING', (0,0), (-1,-1), 4),('FONTSIZE', (0,0), (-1,-1), 8)]))
     w, h = table.wrapOn(can, 3.5*inch, y); table.drawOn(can, 0.25*inch, y - h); can.save(); packet.seek(0)
-    return packet.getvalue() # FIXED: Return raw bytes for st.download_button
+    return packet.getvalue()
 
 # --- 5. DATA EXTRACTION ---
 def extract_tcg_data(uploaded_file):
@@ -97,16 +92,23 @@ def extract_tcg_data(uploaded_file):
         return data, items
     except: return None, None
 
-# --- 6. AUTHENTICATION ---
+# --- 6. AUTHENTICATION (FIXED ERROR HANDLING) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    u_email = st.sidebar.text_input("Email"); u_pass = st.sidebar.text_input("Password", type="password")
+    u_email = st.sidebar.text_input("Email")
+    u_pass = st.sidebar.text_input("Password", type="password")
     if st.sidebar.button("Log In"):
-        res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-        if res.user: st.session_state.user = res.user; st.rerun() 
+        try:
+            res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
+            if res.user: st.session_state.user = res.user; st.rerun() 
+        except Exception as e:
+            st.sidebar.error("Login Failed. Check if Email Auth is enabled in Supabase.") # User-friendly catch
     if st.sidebar.button("Sign Up"):
-        supabase.auth.sign_up({"email": u_email, "password": u_pass}); st.sidebar.success("Account Created! Click Log In.")
+        try:
+            supabase.auth.sign_up({"email": u_email, "password": u_pass})
+            st.sidebar.success("Account Created! Click Log In.")
+        except: st.sidebar.error("Signup failed.")
     st.stop()
 
 # --- 7. MAIN APP DASHBOARD ---
@@ -125,7 +127,8 @@ if profile.get('tier') == 'New':
     colA, colB = st.columns(2)
     with colA:
         st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
-        if st.button("Activate Free Trial"): supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
+        if st.button("Activate Free Trial"):
+            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
@@ -150,10 +153,7 @@ uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 if uploaded_file:
     h_data, i_list = extract_tcg_data(uploaded_file)
     if h_data:
-        # PRE-PROCESS: Generate PDF bytes once here
         final_pdf_bytes = create_label_pdf(h_data, i_list)
-        
-        # DOWNLOAD BUTTON: Now uses pre-generated data for stability
         st.download_button(
             label=f"📥 DOWNLOAD LABEL PDF: {h_data['order_no']}",
             data=final_pdf_bytes,
