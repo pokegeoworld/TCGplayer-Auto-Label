@@ -106,19 +106,25 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION (RESTORED SIGN UP) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
     u_email, u_pass = st.sidebar.text_input("Email"), st.sidebar.text_input("Password", type="password")
-    if st.sidebar.button("Log In"):
+    l_col, r_col = st.sidebar.columns(2)
+    if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
             if res.user: st.session_state.user = res.user; st.rerun() 
         except: st.sidebar.error("Login Failed.")
+    if r_col.button("Sign Up"):
+        try:
+            supabase.auth.sign_up({"email": u_email, "password": u_pass})
+            st.sidebar.success("Account Created! Click Log In.")
+        except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. SIDEBAR ACCOUNT SETTINGS (RESTORED) ---
+# --- 6. SIDEBAR USERNAME & PROFILE ---
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
@@ -127,12 +133,12 @@ if not profile:
     supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
     profile = {"id": user.id, "credits": 0, "tier": "None"}
 
-st.sidebar.title("🎴 Account Controls")
+st.sidebar.title(f"👤 {user.email}")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
 st.sidebar.write(f"Tier: **{'Active' if profile['credits'] > 0 else profile['tier']}**")
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
-if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
 # --- 7. PRICING GATE ---
 if profile['credits'] == 0 and profile['tier'] == "None":
