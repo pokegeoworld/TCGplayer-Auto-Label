@@ -36,12 +36,10 @@ st.markdown("""
 # --- 4. LOGIC FUNCTIONS ---
 def get_or_create_profile(user_id):
     try:
-        # Step 1: Check for existing profile
         res = supabase.table("profiles").select("*").eq("id", user_id).execute()
         if res.data:
             return res.data[0]
-        
-        # Step 2: Create if missing (Upsert bypasses the 42501 error with the new policy)
+        # Upsert bypasses the 42501 error with the 'allow_all_own_data' policy
         new_prof = supabase.table("profiles").upsert({"id": user_id, "credits": 5, "tier": "free"}).execute()
         return new_prof.data[0]
     except Exception as e:
@@ -59,10 +57,17 @@ def create_label_pdf(items):
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
     can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
     y -= 0.5*inch; can.setFont("Helvetica", 11)
+    
     for qty, name, set_name in items:
-        if y < 0.5*inch:
+        if y < 0.8*inch: # Buffer for footer
             can.showPage(); y = 5.75*inch; can.setFont("Helvetica", 11)
         can.drawString(x, y, f"[{qty}x] {name} - {set_name}"); y -= lh
+    
+    # Pre-coded Home Address Footer
+    can.setFont("Helvetica-Oblique", 8); can.setStrokeColorRGB(0.8, 0.8, 0.8)
+    can.line(0.25*inch, 0.5*inch, 3.75*inch, 0.5*inch)
+    can.drawString(0.25*inch, 0.35*inch, "Return: 36 Michael Anthony ln, Depew NY 14043")
+    
     can.save(); packet.seek(0)
     return packet
 
@@ -77,25 +82,21 @@ if "user" not in st.session_state:
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
                 st.session_state.user = res.user; st.rerun()
-            except: st.sidebar.error("Login failed. Check your password.")
+            except: st.sidebar.error("Login failed.")
         if c2.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
-                st.sidebar.success("Account created! Now click 'Log In'.")
-            except: st.sidebar.error("Signup failed. User may already exist.")
+                st.sidebar.success("Created! Now click 'Log In'.")
+            except: st.sidebar.error("Signup failed.")
     st.stop()
 
 # --- 6. MAIN DASHBOARD ---
 user = st.session_state.user
 profile = get_or_create_profile(user.id)
+if not profile: st.stop()
 
-if not profile:
-    st.stop()
-
-st.sidebar.write(f"Logged in as: **{user.email}**")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
-if st.sidebar.button("Log Out"):
-    st.session_state.clear(); st.rerun()
+if st.sidebar.button("Log Out"): st.session_state.clear(); st.rerun()
 
 st.markdown('<p class="hero-title">TCGplay Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
