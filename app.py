@@ -105,7 +105,7 @@ def create_label_pdf(data, items):
     return packet.getvalue()
 
 # ────────────────────────────────────────────────
-#  PDF → DATA EXTRACTION
+#  PDF → DATA EXTRACTION (fixed version - no ?. operator)
 # ────────────────────────────────────────────────
 def extract_tcg_data(uploaded_file):
     try:
@@ -115,16 +115,21 @@ def extract_tcg_data(uploaded_file):
 
         ship_idx = next((i for i, line in enumerate(lines) if "Ship To:" in line), None)
         if ship_idx is None:
-            return None, None, "Could not find 'Ship To:' section"
+            return None, None, "Could not find 'Ship To:' section in the PDF"
+
+        # Helper to safely get regex group or fallback
+        def get_match(pattern, default="??"):
+            m = re.search(pattern, text, re.I | re.DOTALL)
+            return m.group(1).strip() if m else default
 
         data = {
-            'buyer_name': lines[ship_idx + 1].strip(),
-            'address': lines[ship_idx + 2].strip(),
-            'city_state_zip': lines[ship_idx + 3].strip(),
-            'date': re.search(r"Order Date.*?(\d{1,2}/\d{1,2}/\d{2,4})", text, re.I)?.group(1) or "??",
-            'method': re.search(r"Shipping Method.*?,\s*\"([^\"]+)\"", text, re.I)?.group(1)?.strip() or "??",
+            'buyer_name': lines[ship_idx + 1].strip() if ship_idx + 1 < len(lines) else "??",
+            'address': lines[ship_idx + 2].strip() if ship_idx + 2 < len(lines) else "??",
+            'city_state_zip': lines[ship_idx + 3].strip() if ship_idx + 3 < len(lines) else "??",
+            'date': get_match(r"Order Date.*?(\d{1,2}/\d{1,2}/\d{2,4})"),
+            'method': get_match(r"Shipping Method.*?,\s*\"([^\"]+)\""),
             'seller': "ThePokeGeo",
-            'order_no': re.search(r"Order Number.*?([A-Z0-9\-]{8,})", text, re.I)?.group(1) or "??"
+            'order_no': get_match(r"Order Number.*?([A-Z0-9\-]{8,})")
         }
 
         # Item rows (CSV-like quoted fields)
@@ -136,14 +141,21 @@ def extract_tcg_data(uploaded_file):
             desc_clean = desc.replace('\n', ' ').strip()
             if "Total" in desc_clean or not qty.isdigit():
                 continue
+            try:
+                price_clean = f"${float(price):.2f}"
+                total_clean = f"${float(total):.2f}"
+            except ValueError:
+                price_clean = f"${price}"
+                total_clean = f"${total}"
             items.append({
                 'qty': qty,
                 'desc': desc_clean,
-                'price': f"${float(price):.2f}",
-                'total': f"${float(total):.2f}"
+                'price': price_clean,
+                'total': total_clean
             })
 
         return data, items, None
+
     except Exception as e:
         return None, None, f"Extraction failed: {str(e)}"
 
@@ -211,28 +223,27 @@ if uploaded_file:
         if st.button("Show raw extracted text (debug)"):
             reader = PdfReader(uploaded_file)
             raw = "\n".join(p.extract_text() or "" for p in reader.pages)
-            st.code(raw[:3000] + "...", language="text")
+            st.code(raw[:4000] + "..." if len(raw) > 4000 else raw, language="text")
     elif data and items:
         pdf_bytes = create_label_pdf(data, items)
 
         # Show preview info
         st.success(f"Ready! Order **{data['order_no']}** – {len(items)} item(s)")
 
-        # **This is the reliable download button**
+        # Download button
         st.download_button(
             label=f"📥 Download 4×6 Label – {data['order_no']}",
             data=pdf_bytes,
             file_name=f"TCG_Label_{data['order_no']}.pdf",
             mime="application/pdf",
             use_container_width=True,
-            key=f"dl_{data['order_no']}"   # helps avoid duplicate widget issues
+            key=f"dl_{data['order_no']}"
         )
 
-        # Deduct credit **after** successful generation (not in on_click)
+        # Deduct credit AFTER successful generation
         if profile['tier'] != 'Unlimited':
             new_credits = profile['credits'] - 1
             supabase.table("profiles").update({"credits": new_credits}).eq("id", user.id).execute()
-            st.session_state.user  # force reference to avoid stale state
-            st.rerun()   # refresh credit display in sidebar
+            st.rerun()  # refresh sidebar credits display
     else:
         st.warning("Could not extract order data. The PDF layout may have changed.")
