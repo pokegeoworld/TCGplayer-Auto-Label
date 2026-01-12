@@ -20,10 +20,6 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.markdown('<p class="title-text">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-
-# --- YOUR EXISTING APP CODE CONTINUES HERE ---
-# Below is the fix for your specific Line 70 error
-st.sidebar.success("Unlimited Access") 
 import streamlit as st
 from supabase import create_client
 import io
