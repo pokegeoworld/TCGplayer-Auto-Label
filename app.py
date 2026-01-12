@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (68PX TITLE & 450PX SIDEBAR) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
@@ -47,58 +47,48 @@ def extract_tcg_data(uploaded_file):
     for page in reader.pages:
         text += page.extract_text() + "\n"
     
-    # Updated Order Number Logic: Captures alphanumeric IDs like E307FE14...
+    # [cite_start]Extract Order Number [cite: 30]
     order_match = re.search(r"Order\s*Number:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
 
-    # NEW EXTRACTION LOGIC:
-    # 1. Splitting the text into lines
-    # 2. Identifying lines that start with a Quantity (digit) followed by Pokemon/YuGiOh/Magic info
+    # [cite_start]Robust extraction for the table format provided [cite: 31]
     items = []
     lines = text.split('\n')
-    for i, line in enumerate(lines):
-        # Look for a line starting with a number (Quantity)
-        match = re.match(r"^(\d+)\s+[\"']?(Pokemon|Magic|Yu-Gi-Oh|Lorcana|Disney).*?[\"']?$", line.strip(), re.IGNORECASE)
+    for line in lines:
+        # Match lines starting with a digit followed by Pokemon/Magic/etc
+        match = re.match(r"^(\d+)\s+(Pokemon|Magic|Yu-Gi-Oh|Lorcana|Disney).*?$", line.strip(), re.IGNORECASE)
         if match:
             qty = match.group(1)
             desc = line.strip()[len(qty):].strip().strip('"').strip("'")
             items.append((qty, desc))
-            
     return items, order_no
 
 def create_label_pdf(items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    x, y, lh = 0.25*inch, 5.75*inch, 0.20*inch
-    can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
-    y -= 0.4*inch
+    x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
     
+    can.setFont("Helvetica-Bold", 14)
+    can.drawString(x, y, "TCGplayer Auto Labels")
+    y -= 0.5*inch
+    
+    can.setFont("Helvetica", 11)
     for qty, desc in items:
         if y < 0.8*inch:
-            can.showPage(); y = 5.75*inch
-            
-        can.setFont("Helvetica-Bold", 10)
-        can.drawString(x, y, f"QTY: {qty}")
-        y -= lh
+            can.showPage()
+            y = 5.75*inch
+            can.setFont("Helvetica", 11)
         
-        can.setFont("Helvetica", 9)
-        # Wrap long descriptions so they don't bleed off the 4x6 label
-        words = desc.split()
-        line = ""
-        for word in words:
-            if can.stringWidth(line + word + " ", "Helvetica", 9) < 3.5*inch:
-                line += word + " "
-            else:
-                can.drawString(x, y, line.strip())
-                y -= lh
-                line = word + " "
-        can.drawString(x, y, line.strip())
-        y -= (lh * 1.5) # Space between items
+        # Clean up description (remove excessive whitespace)
+        clean_desc = " ".join(desc.split())
+        can.drawString(x, y, f"[{qty}x] {clean_desc}")
+        y -= lh
     
-    # Return Address Footer
+    # Return Address
     can.setFont("Helvetica-Oblique", 8); can.setStrokeColorRGB(0.8, 0.8, 0.8)
     can.line(0.25*inch, 0.5*inch, 3.75*inch, 0.5*inch)
     can.drawString(0.25*inch, 0.35*inch, "Return: 36 Michael Anthony ln, Depew NY 14043")
+    
     can.save(); packet.seek(0)
     return packet
 
@@ -127,7 +117,8 @@ if "user" not in st.session_state:
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
                 if res.user:
-                    st.session_state.user = res.user; st.rerun()
+                    st.session_state.user = res.user
+                    st.rerun()
             except: st.error("Login failed.")
         if c2.form_submit_button("Sign Up"):
             try:
@@ -167,7 +158,7 @@ if uploaded_file:
             new_c = profile['credits'] - 1
             supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
             
-            # Trigger Download
+            # Execute Download
             auto_download(pdf_result, filename)
             st.success(f"Downloading {filename}...")
         else:
