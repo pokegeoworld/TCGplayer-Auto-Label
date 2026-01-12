@@ -13,13 +13,13 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (48PX TITLE & UI FIXES) ---
+# --- 3. STYLING (68PX TITLE & UI FIXES) ---
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
     .hero-title {
         color: #1E3A8A;
-        font-size: 48px;
+        font-size: 68px;
         font-weight: 800;
         text-align: center;
         margin-top: -40px;
@@ -51,7 +51,7 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
-    # Explicit 4x6 Page Size for Thermal Printers
+    # Explicit 4x6 Page Size for Thermal Label Printers
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
     
@@ -74,7 +74,7 @@ def create_label_pdf(items):
 # --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">Fast and automated thermal printer label creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
     
     with st.sidebar.form("auth_form"):
         st.subheader("Account Login")
@@ -124,7 +124,7 @@ if st.sidebar.button("Log Out"):
 
 # Prominent Main Title
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-st.markdown('<p class="hero-subtitle">Fast and automated thermal printer label creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
+st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip PDF", type="pdf")
 
