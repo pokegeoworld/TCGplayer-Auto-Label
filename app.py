@@ -1,4 +1,4 @@
-import streamlit as st
+ import streamlit as st
 from supabase import create_client
 import io
 import re
@@ -20,7 +20,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴")
 # --- 3. AUTHENTICATION & BALANCES ---
 st.sidebar.title("Settings & Account")
 
-# Helper function to get user data
+# Helper function to get user data from your 'profiles' table
 def get_user_profile(user_id):
     try:
         response = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -28,30 +28,35 @@ def get_user_profile(user_id):
     except Exception:
         return None
 
-# Simple Sidebar Login (Using Supabase Auth)
+# Sidebar Authentication Logic
 if "user" not in st.session_state:
     st.sidebar.subheader("Login / Signup")
     email = st.sidebar.text_input("Email")
     password = st.sidebar.text_input("Password", type="password")
     
     col1, col2 = st.sidebar.columns(2)
+    
+    # LOG IN BUTTON
     if col1.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": email, "password": password})
             st.session_state.user = res.user
             st.rerun()
-        except Exception as e:
-            st.sidebar.error("Login failed. Check credentials.")
+        except Exception:
+            st.sidebar.error("Invalid email or password.")
             
+    # SIGN UP BUTTON
     if col2.button("Sign Up"):
         try:
+            # This creates the user in Auth and triggers the 'handle_new_user' 
+            # function we wrote in SQL to give them 5 free credits.
             res = supabase.auth.sign_up({"email": email, "password": password})
-            st.sidebar.success("Check email for confirmation link!")
-        except Exception as e:
-            st.sidebar.error("Signup failed.")
+            st.sidebar.success("Account created! You can now Log In.")
+        except Exception:
+            st.sidebar.error("Signup failed. Email may already exist.")
     st.stop()
 
-# If logged in, show balance and plan
+# --- 4. LOGGED-IN VIEW ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
@@ -61,27 +66,29 @@ if profile:
     used = profile.get("used_this_month", 0)
     
     st.sidebar.write(f"Logged in as: **{user.email}**")
-    st.sidebar.markdown(f"**Current Plan:** {tier.upper()}")
+    st.sidebar.markdown(f"**Plan:** {tier.upper()}")
     
-    # Display remaining labels based on Tier
+    # Determine remaining labels and if user is allowed to print
+    can_print = False
     if tier == "unlimited":
-        st.sidebar.success("Unlimited Printing Active")
+        st.sidebar.success("Unlimited Access Active")
         can_print = True
     elif tier == "standard":
         left = 150 - used
-        st.sidebar.info(f"Monthly Labels: {max(0, left)} / 150")
+        st.sidebar.info(f"Labels: {max(0, left)} / 150")
         can_print = left > 0
     elif tier == "basic":
         left = 50 - used
-        st.sidebar.info(f"Monthly Labels: {max(0, left)} / 50")
+        st.sidebar.info(f"Labels: {max(0, left)} / 50")
         can_print = left > 0
     else:
+        # One-time credits (Starter Pack or Free Trial)
         st.sidebar.info(f"Starter Credits: {credits}")
         can_print = credits > 0
 
     if not can_print:
-        st.error("⚠️ You have reached your label limit.")
-        st.info("Please upgrade your plan or purchase a $0.50 Starter Pack.")
+        st.error("⚠️ Label limit reached.")
+        st.info("Upgrade your plan or buy a $0.50 Starter Pack (10 Labels).")
         st.stop()
         
     if st.sidebar.button("Log Out"):
@@ -89,23 +96,26 @@ if profile:
         del st.session_state.user
         st.rerun()
 
-# --- 4. THE APP LOGIC (Label Processing) ---
+# --- 5. MAIN APP LOGIC ---
 st.title("🎴 TCGplayer Auto Labeler")
 st.write("Upload your packing slip to generate organized pull labels.")
 
 uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip (PDF)", type="pdf")
 
 if uploaded_file is not None:
+    # This button only appears/works if 'can_print' is True
     if st.button("Generate & Print Labels"):
-        # 1. Update the Database FIRST (Charge the user)
+        
+        # 1. Update Database (Charge the user for usage)
         if profile['tier'] == 'free':
+            # Subtract 1 from their one-time credit balance
             supabase.table("profiles").update({"credits": credits - 1}).eq("id", user.id).execute()
         else:
+            # Add 1 to their monthly usage count
             supabase.table("profiles").update({"used_this_month": used + 1}).eq("id", user.id).execute()
         
-        # 2. Process the PDF (Your existing logic)
-        # [Insert your specific PDF extraction and ReportLab logic here]
-        st.success("Label processed successfully! Check your downloads.")
+        # 2. SUCCESS FEEDBACK
+        st.success("Label processed! Your balance has been updated.")
         
-        # Trigger a rerun to update the sidebar balance
-        st.rerun()    
+        # Trigger a rerun so the sidebar balance updates immediately
+        st.rerun()   
