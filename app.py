@@ -14,13 +14,12 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (RESTORED STABLE SIDE-BY-SIDE) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .pricing-card { border: 2px solid #e1e4e8; padding: 30px 15px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 4px 10px rgba(0,0,0,0.05); min-height: 350px; display: flex; flex-direction: column; justify-content: center; }
-    .sub-header { background: #3B82F6; color: white; padding: 20px; border-radius: 12px; text-align: center; font-weight: 900; margin: 30px auto 20px auto; font-size: 32px !important; text-transform: uppercase; }
     
     .stDownloadButton > button {
         background-color: #15803d !important;
@@ -41,7 +40,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE MASTER PDF CREATOR (STABLE LAYOUT) ---
+# --- 4. THE MASTER PDF CREATOR (YOUR 18PT BOLD LAYOUT) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -51,7 +50,7 @@ def create_label_pdf(data, items):
     c.setFont("Helvetica-Bold", 18)
     c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
     c.drawString(0.5 * inch, height - 1.30 * inch, data['address'])
-    c.drawString(0.5 * inch, y := height - 1.60 * inch, data['city_state_zip'])
+    c.drawString(0.5 * inch, height - 1.60 * inch, data['city_state_zip'])
     
     c.setLineWidth(2)
     c.line(0.5 * inch, height - 1.9 * inch, 7.5 * inch, height - 1.9 * inch)
@@ -113,13 +112,13 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. DATA EXTRACTION (HEAVY-DUTY SCAN) ---
+# --- 5. DATA EXTRACTION ---
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
     lines = [l.strip() for l in text.split('\n') if l.strip()]
     try:
-        ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line)
+        ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line or "Shipping Address:" in line)
         data = {
             'buyer_name': lines[ship_idx + 1],
             'address': lines[ship_idx + 2],
@@ -130,7 +129,6 @@ def extract_tcg_data(uploaded_file):
             'seller': "ThePokeGeo"
         }
         items = []
-        # Captured from Jesus Romero quoted CSV format 
         item_matches = re.findall(r'\"(\d+)\"\s*,\s*\"([\s\S]*?)\"\s*,\s*\"\\?\$([\d\.]+)\"\s*,\s*\"\\?\$([\d\.]+)\"', text)
         for m in item_matches:
             if "Total" in m[1]: continue 
@@ -154,12 +152,15 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 7. DATABASE HANDSHAKE ---
+# --- 7. DATABASE HANDSHAKE (FIXED .single() ERROR) ---
 user = st.session_state.user
-profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
+# Removed .single() to prevent crash
+profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+profile = profile_res.data[0] if profile_res.data else None
+
 if not profile:
     supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
-    profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
+    profile = {"id": user.id, "credits": 5, "tier": "New"}
 
 st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
