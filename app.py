@@ -14,13 +14,12 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (PERFECTED HIGH-IMPACT UI) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .pricing-card { border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); min-height: 380px; display: flex; flex-direction: column; justify-content: center; }
-    .free-trial-large { font-size: 65px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 20px; }
     .big-stat { font-size: 90px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 35px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 15px; }
     .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
@@ -46,7 +45,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (22PT TOP-ALIGNED ADDRESS) ---
+# --- 4. THE PDF CREATOR (22PT TOP-ALIGNED ADDRESS) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -93,38 +92,52 @@ if "user" not in st.session_state:
     if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if res.user: st.session_state.user = res.user; st.rerun() 
+            if res.user: 
+                st.session_state.user = res.user
+                st.rerun() 
         except: st.sidebar.error("Login Failed.")
     if r_col.button("Sign Up"):
-        try: supabase.auth.sign_up({"email": u_email, "password": u_pass}); st.sidebar.success("Created! Log In.")
+        try: 
+            supabase.auth.sign_up({"email": u_email, "password": u_pass})
+            st.sidebar.success("Account created! Now click Log In.")
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE ---
+# --- 6. DATABASE HANDSHAKE (FAILSAFE SYNC) ---
 user = st.session_state.user
-profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-profile = profile_res.data[0] if profile_res.data else None
+profile = None
+retries = 0
 
-# Added safety for new user trigger delay
-if not profile:
-    time.sleep(1)
+# Failsafe: Wait for SQL Trigger to finish profile creation
+while not profile and retries < 6:
     profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-    profile = profile_res.data[0] if profile_res.data else None
+    if profile_res.data:
+        profile = profile_res.data[0]
+        break
+    time.sleep(0.5)
+    retries += 1
+
+if not profile:
+    st.error("Profile synchronization error. Please log out and back in.")
+    if st.button("Logout"):
+        st.session_state.clear()
+        st.rerun()
+    st.stop()
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
-st.sidebar.write(f"Credits: **{profile['credits'] if profile else 0}**")
-st.sidebar.write(f"Tier: **{profile['tier'] if profile and profile['credits'] == 0 else 'Active'}**")
+st.sidebar.write(f"Credits: **{profile['credits']}**")
+st.sidebar.write(f"Tier: **{'Active' if profile['credits'] > 0 else profile['tier']}**")
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 8. PRICING GATE ---
-if profile and profile.get('credits') == 0 and profile.get('tier') == 'None':
+# --- 8. PRICING GATE (RE-ENABLED FOR NEW USERS) ---
+if profile['credits'] == 0 and profile['tier'] == 'None':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="big-stat">5</p><p class="label-text">Free Labels</p></div>', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
             supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
     with colB:
