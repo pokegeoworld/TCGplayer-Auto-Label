@@ -19,6 +19,7 @@ st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
     .title-text { color: #1E3A8A; font-size: 32px; font-weight: bold; text-align: center; padding-bottom: 20px; }
+    /* Hides "Press Enter to Submit" */
     div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -80,32 +81,33 @@ if "user" not in st.session_state:
         try:
             res = supabase.auth.sign_up({"email": email, "password": password})
             if res.user:
-                supabase.table("profiles").upsert({"id": res.user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
+                # Initial Profile Create
+                supabase.table("profiles").upsert({"id": res.user.id, "tier": "free", "credits": 5}).execute()
                 st.sidebar.success("Account created! Please Log In.")
         except Exception as e:
             st.sidebar.error(f"Signup error: {str(e)}")
     
     st.markdown('<p class="title-text">TCGplayer 4x6 Labeler</p>', unsafe_allow_html=True)
-    st.info("Please log in via the sidebar to access the label generator.")
+    st.info("Log in via the sidebar to start.")
     st.stop()
 
 # --- 6. MAIN INTERFACE ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
+# Fallback profile creation
 if user and not profile:
     try:
-        supabase.table("profiles").upsert({"id": user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
+        supabase.table("profiles").upsert({"id": user.id, "tier": "free", "credits": 5}).execute()
         profile = get_user_profile(user.id)
     except Exception as e:
         st.error(f"Database Error: {str(e)}")
         st.stop()
 
 if profile:
-    tier, credits, used = profile.get("tier", "free"), profile.get("credits", 0), profile.get("used_this_month", 0)
     st.sidebar.title("Your Account")
     st.sidebar.write(f"Logged in: **{user.email}**")
-    st.sidebar.write(f"Credits: **{credits}**")
+    st.sidebar.write(f"Credits: **{profile.get('credits', 0)}**")
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
@@ -114,15 +116,15 @@ if profile:
     uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
     
     if uploaded_file and st.button("Generate 4x6 Labels"):
-        if tier == "unlimited" or credits > 0:
+        if profile.get('tier') == "unlimited" or profile.get('credits', 0) > 0:
             data = extract_tcg_data(uploaded_file)
             if data:
                 pdf_output = create_label_pdf(data)
                 try:
-                    supabase.table("profiles").update({
-                        "used_this_month": used + 1,
-                        "credits": credits if tier == "unlimited" else credits - 1
-                    }).eq("id", user.id).execute()
+                    # Update credits
+                    new_credits = profile.get('credits', 0) if profile.get('tier') == "unlimited" else profile.get('credits', 0) - 1
+                    supabase.table("profiles").update({"credits": new_credits, "used_this_month": profile.get('used_this_month', 0) + 1}).eq("id", user.id).execute()
+                    
                     st.success(f"Parsed {len(data)} items.")
                     st.download_button("📥 Download 4x6 PDF", pdf_output, "TCG_4x6.pdf", "application/pdf")
                 except Exception as e:
