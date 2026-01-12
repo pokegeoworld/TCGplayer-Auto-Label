@@ -4,7 +4,6 @@ import io
 import re
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 
 # --- 1. PAGE CONFIGURATION & STYLING ---
@@ -22,7 +21,7 @@ st.markdown("""
     }
     .title-text {
         color: #1E3A8A;
-        font-size: 40px;
+        font-size: 32px;
         font-weight: bold;
         text-align: center;
         padding-bottom: 20px;
@@ -31,7 +30,6 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. DATABASE CONNECTION ---
-# Ensure these keys are set in your .streamlit/secrets.toml
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
@@ -45,36 +43,36 @@ def get_user_profile(user_id):
         return None
 
 def extract_tcg_data(uploaded_file):
-    """Parses TCGplayer Packing Slip for Qty, Name, and Set."""
     reader = PdfReader(uploaded_file)
     all_text = ""
     for page in reader.pages:
         all_text += page.extract_text() + "\n"
     
-    # Common TCGplayer pattern: Quantity Name [Set Name]
     pattern = r"(\d+)\s+(.*?)\s+\[(.*?)\]"
     items = re.findall(pattern, all_text)
     return items
 
 def create_label_pdf(items):
-    """Generates a PDF layout suitable for labels."""
     packet = io.BytesIO()
-    can = canvas.Canvas(packet, pagesize=letter)
-    width, height = letter
+    # Setting pagesize to 4x6 inches for thermal printers
+    label_size = (4 * inch, 6 * inch)
+    can = canvas.Canvas(packet, pagesize=label_size)
     
-    x_offset = 0.5 * inch
-    y_offset = height - 0.75 * inch
-    line_height = 0.3 * inch
+    # Starting coordinates for 4x6 (0,0 is bottom left)
+    x_offset = 0.25 * inch
+    y_offset = 5.75 * inch
+    line_height = 0.25 * inch
     
-    can.setFont("Helvetica-Bold", 14)
-    can.drawString(x_offset, y_offset, "TCGplayer Auto Labels")
-    y_offset -= 0.5 * inch
+    can.setFont("Helvetica-Bold", 12)
+    can.drawString(x_offset, y_offset, "TCGplayer Label")
+    y_offset -= 0.4 * inch
     
     can.setFont("Helvetica", 10)
     for qty, name, set_name in items:
-        if y_offset < 1 * inch:
+        # If text goes near the bottom of the 6-inch label, start a new page
+        if y_offset < 0.5 * inch:
             can.showPage()
-            y_offset = height - 0.75 * inch
+            y_offset = 5.75 * inch
             can.setFont("Helvetica", 10)
             
         text = f"[{qty}x] {name} - {set_name}"
@@ -105,7 +103,7 @@ if "user" not in st.session_state:
     if col2.button("Sign Up"):
         try:
             res = supabase.auth.sign_up({"email": email, "password": password})
-            st.sidebar.success("Account created! Check email or Log In.")
+            st.sidebar.success("Check email or Log In.")
         except Exception:
             st.sidebar.error("Signup failed.")
     st.stop()
@@ -121,43 +119,39 @@ if profile:
     
     st.sidebar.write(f"Logged in: **{user.email}**")
     st.sidebar.write(f"Plan: **{tier.upper()}**")
-    st.sidebar.write(f"Credits: **{credits}**")
     
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
 
     # --- MAIN APP INTERFACE ---
-    st.markdown('<p class="title-text">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
+    st.markdown('<p class="title-text">TCGplayer 4x6 Label Creator</p>', unsafe_allow_html=True)
     
-    uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip (PDF)", type="pdf")
+    uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
     
     if uploaded_file:
-        if st.button("Generate Labels"):
+        if st.button("Generate 4x6 Labels"):
             if tier == "unlimited" or credits > 0:
-                with st.spinner("Processing labels..."):
+                with st.spinner("Formatting for 4x6..."):
                     data = extract_tcg_data(uploaded_file)
                     
                     if data:
                         pdf_output = create_label_pdf(data)
                         
-                        # Update Usage in Supabase
-                        new_used = used + 1
-                        new_credits = credits if tier == "unlimited" else credits - 1
-                        
+                        # Update Usage
                         supabase.table("profiles").update({
-                            "used_this_month": new_used,
-                            "credits": new_credits
+                            "used_this_month": used + 1,
+                            "credits": credits if tier == "unlimited" else credits - 1
                         }).eq("id", user.id).execute()
                         
-                        st.success(f"Successfully parsed {len(data)} items!")
+                        st.success(f"Parsed {len(data)} items for 4x6 print.")
                         st.download_button(
-                            label="📥 Download Labels PDF",
+                            label="📥 Download 4x6 PDF",
                             data=pdf_output,
-                            file_name=f"TCG_Labels_{user.id[:5]}.pdf",
+                            file_name="TCG_4x6_Labels.pdf",
                             mime="application/pdf"
                         )
                     else:
-                        st.error("No items found. Please ensure this is a standard TCGplayer Packing Slip.")
+                        st.error("No items found in PDF.")
             else:
-                st.error("Insufficient credits. Please upgrade your plan.")
+                st.error("No credits remaining.")
