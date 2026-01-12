@@ -1,4 +1,30 @@
 import streamlit as st
+
+# Set page title and layout
+st.set_page_config(page_title="TCGplayer Auto Label", layout="centered")
+
+# Custom Title and Basic Color Formatting
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f5f7f9;
+    }
+    .title-text {
+        color: #1E3A8A;
+        font-size: 40px;
+        font-weight: bold;
+        text-align: center;
+        padding-bottom: 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.markdown('<p class="title-text">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
+
+# --- YOUR EXISTING APP CODE CONTINUES HERE ---
+# Below is the fix for your specific Line 70 error
+st.sidebar.success("Unlimited Access") 
+import streamlit as st
 from supabase import create_client
 import io
 import re
