@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (FIXED BUTTON WIDTH & CENTERED LAYOUT) ---
+# --- 3. STYLING (CENTERED BUTTONS & MASSIVE TEXT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -32,25 +32,26 @@ st.markdown("""
     }
     
     /* TEXT SCALING */
-    .free-trial-title { font-size: 50px !important; font-weight: 900; color: #1E3A8A; line-height: 1.2; margin-bottom: 10px; }
+    .free-trial-title { font-size: 55px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 15px; }
     .big-stat { font-size: 85px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 32px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
     .small-price { font-size: 30px !important; color: #374151; font-weight: 800; margin-top: 10px; }
     .tier-name { font-size: 24px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; }
     
-    /* UNIFORM CENTERED BUTTONS - FIXED WIDTH FOR ALL */
+    /* UNIFORM CENTERED BUTTONS */
     div.stButton, div.stLinkButton {
         display: flex !important;
         justify-content: center !important;
+        align-items: center !important;
         width: 100% !important;
     }
     
     div.stButton > button, div.stLinkButton > a {
-        width: 300px !important; /* Fixed width to ensure all look the same */
+        width: 320px !important; 
         border-radius: 12px !important;
         font-weight: 800 !important;
         height: 70px !important;
-        font-size: 20px !important;
+        font-size: 22px !important;
         background-color: #1E3A8A !important;
         color: white !important;
         display: flex !important;
@@ -107,7 +108,7 @@ def trigger_auto_download(pdf_bytes, filename):
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION (1-CLICK SUCCESS) ---
+# --- 5. AUTHENTICATION (REINFORCED 1-CLICK SUCCESS) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -129,7 +130,7 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. MAIN APP DASHBOARD ---
+# --- 6. MAIN DASHBOARD ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 if not profile:
@@ -141,11 +142,11 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (CENTERED BUTTONS & CLEAN LAYOUT) ---
+# --- 7. PRICING WALL (CENTERED BUTTONS & NO $0) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     
-    # One-Time Section
+    # One-Time Section - Explicitly Centered
     colA, colB = st.columns(2)
     with colA:
         st.markdown('<div class="pricing-card"><p class="free-trial-title">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p></div>', unsafe_allow_html=True)
@@ -158,7 +159,7 @@ if profile.get('tier') == 'New':
 
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     
-    # Monthly Section
+    # Monthly Section - Explicitly Centered
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown('<div class="pricing-card"><p class="tier-name">Basic</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
