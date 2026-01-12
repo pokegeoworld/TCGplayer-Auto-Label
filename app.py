@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-import io, re, base64
+import io, re
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (68PX TITLE & 450PX SIDEBAR) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
@@ -46,10 +46,8 @@ def extract_tcg_data(uploaded_file):
     text = ""
     for page in reader.pages:
         text += page.extract_text() + "\n"
-    
     order_match = re.search(r"Order\s*Number:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
-
     items = []
     lines = text.split('\n')
     for line in lines:
@@ -72,7 +70,6 @@ def create_label_pdf(items):
             can.showPage(); y = 5.75*inch; can.setFont("Helvetica", 11)
         clean_desc = " ".join(desc.split())
         can.drawString(x, y, f"[{qty}x] {clean_desc}"); y -= lh
-    
     can.setFont("Helvetica-Oblique", 8); can.setStrokeColorRGB(0.8, 0.8, 0.8)
     can.line(0.25*inch, 0.5*inch, 3.75*inch, 0.5*inch)
     can.drawString(0.25*inch, 0.35*inch, "Return: 36 Michael Anthony ln, Depew NY 14043")
@@ -84,7 +81,6 @@ if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
     with st.sidebar.form("auth"):
-        st.subheader("Account Access")
         e, p = st.text_input("Email"), st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
         if c1.form_submit_button("Log In"):
@@ -119,29 +115,30 @@ if st.sidebar.button("Log Out"):
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
+uploaded_file = st.file_uploader("Step 1: Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
     if profile['credits'] > 0:
         items, order_no = extract_tcg_data(uploaded_file)
         if items:
+            # Generate the PDF and store it in memory for the button
             pdf_result = create_label_pdf(items)
             filename = f"TCGplayer_{order_no}.pdf"
             
-            # Deduct Credit and refresh profile to prevent over-deduction on retry
-            new_c = profile['credits'] - 1
-            supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
+            st.success(f"Label ready for Order {order_no}")
             
-            # Show a clear Download Button as the primary action (more reliable than script injection)
-            st.success(f"Label Generated for Order {order_no}!")
-            st.download_button(
-                label="📥 Download Label PDF",
+            # The download button MUST be the final step to trigger the browser's download prompt
+            if st.download_button(
+                label="Step 2: Click to Download Label",
                 data=pdf_result,
                 file_name=filename,
                 mime="application/pdf",
                 use_container_width=True
-            )
-            st.info("Click the button above if the download didn't start automatically.")
+            ):
+                # Only deduct credit AFTER the user successfully initiates the download
+                new_c = profile['credits'] - 1
+                supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
+                st.rerun()
         else:
             st.error("No item data found. Check PDF format.")
     else:
