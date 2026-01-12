@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (SIDE-BY-SIDE STABLE LAYOUT) ---
+# --- 3. STYLING (RESTORED STABLE SIDE-BY-SIDE) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -27,14 +27,15 @@ st.markdown("""
     .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
     .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
     
-    /* Manual Button Styling */
+    /* Primary Action Button */
     .stDownloadButton > button {
         background-color: #22c55e !important;
         color: white !important;
-        font-size: 24px !important;
-        height: 80px !important;
+        font-size: 26px !important;
+        height: 90px !important;
         font-weight: 800 !important;
-        border-radius: 12px !important;
+        border-radius: 15px !important;
+        border: 2px solid #166534 !important;
     }
     
     div.stButton > button, div.stLinkButton > a { width: 100% !important; border-radius: 12px !important; font-weight: 800 !important; height: 75px !important; font-size: 24px !important; background-color: #1E3A8A !important; color: white !important; display: flex !important; align-items: center !important; justify-content: center !important; text-decoration: none !important; border: none !important; }
@@ -98,8 +99,9 @@ def extract_tcg_data(uploaded_file):
             'order_no': re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
         }
         items = []
-        item_matches = re.findall(r'"(\d+)"\s*,\s*"([\s\S]*?)"\s*,\s*"\s*\\\$([\d\.]+)"\s*,\s*"\s*\\\$([\d\.]+)"', text)
-        for m in item_matches:
+        item_pattern = r'"(\d+)"\s*,\s*"([\s\S]*?)"\s*,\s*"\s*\\\$([\d\.]+)"\s*,\s*"\s*\\\$([\d\.]+)"'
+        matches = re.findall(item_pattern, text)
+        for m in matches:
             items.append({'qty': m[0], 'desc': m[1].replace('\n', ' ').strip(), 'price': f"${m[2]}", 'total': f"${m[3]}"})
         return data, items
     except: return None, None
@@ -161,29 +163,25 @@ st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_all
 uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
-    if profile['tier'] == 'Unlimited' or profile['credits'] > 0:
-        h_data, i_list = extract_tcg_data(uploaded_file)
-        if h_data:
-            pdf_result = create_label_pdf(h_data, i_list)
-            filename = f"TCGplayer_{h_data['order_no']}.pdf"
+    # Extract data first to get order number for the filename
+    h_data, i_list = extract_tcg_data(uploaded_file)
+    
+    if h_data:
+        # Check credits
+        if profile['tier'] == 'Unlimited' or profile['credits'] > 0:
             
-            # 1. Trigger Auto-Download (using reinforced script)
-            if f"dl_{h_data['order_no']}" not in st.session_state:
-                if profile['tier'] != 'Unlimited': 
-                    supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
-                st.session_state[f"dl_{h_data['order_no']}"] = True
-                b64 = base64.b64encode(pdf_result.getvalue()).decode()
-                # Use a delayed script to prevent blocking
-                st.components.v1.html(f"""
-                    <a id="autodl" href="data:application/pdf;base64,{b64}" download="{filename}"></a>
-                    <script>setTimeout(() => {{ document.getElementById("autodl").click(); }}, 300);</script>
-                """, height=0)
-            
-            # 2. Backup Manual Download Button (Always Visible)
+            # The download button now handles the logic and the file generation in one click
             st.download_button(
-                label="📥 DOWNLOAD LABEL (BACKUP)", 
-                data=pdf_result, 
-                file_name=filename, 
-                mime="application/pdf", 
-                use_container_width=True
+                label=f"📥 GENERATE & DOWNLOAD LABEL: {h_data['order_no']}",
+                data=create_label_pdf(h_data, i_list),
+                file_name=f"TCGplayer_{h_data['order_no']}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                # Credit deduction happens on click via this callback
+                on_click=lambda: (
+                    supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute() 
+                    if profile['tier'] != 'Unlimited' else None
+                )
             )
+        else:
+            st.error("You are out of credits! Please upgrade your plan in settings.")
