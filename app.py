@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-import io, re
+import io, re, time
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -100,13 +100,12 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (FIXED: NO MANUAL INSERT) ---
+# --- 6. DATABASE HANDSHAKE ---
 user = st.session_state.user
-# Only Read. The SQL Trigger handles the creation
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
-# If for some extreme reason the trigger hasn't finished, wait 1 second and retry
+# Added safety for new user trigger delay
 if not profile:
     time.sleep(1)
     profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
