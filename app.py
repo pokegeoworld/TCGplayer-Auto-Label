@@ -32,7 +32,7 @@ st.markdown("""
         text-align: center;
         padding-bottom: 30px;
     }
-    /* Hides the "Press Enter to submit form" helper text */
+    /* Hides the "Press Enter to submit form" text */
     div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -52,7 +52,6 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
-    # Explicit 4x6 Page Size
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
     can.setFont("Helvetica-Bold", 14)
@@ -76,46 +75,57 @@ if "user" not in st.session_state:
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
     
     with st.sidebar.form("auth_form"):
-        st.subheader("Account Login")
-        e, p = st.text_input("Email"), st.text_input("Password", type="password")
+        st.subheader("Account Access")
+        e = st.text_input("Email")
+        p = st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
-        login_btn, signup_btn = c1.form_submit_button("Log In"), c2.form_submit_button("Sign Up")
+        login_btn = c1.form_submit_button("Log In")
+        signup_btn = c2.form_submit_button("Sign Up")
 
     if login_btn:
         try:
             res = supabase.auth.sign_in_with_password({"email": e, "password": p})
             st.session_state.user = res.user
             st.rerun()
-        except: st.sidebar.error("Invalid email or password.")
+        except Exception as err:
+            st.sidebar.error(f"Login Error: {str(err)}")
             
     if signup_btn:
         try:
-            # Note: Signup relies on the Database Trigger in Supabase
-            supabase.auth.sign_up({"email": e, "password": p})
-            st.sidebar.success("Account created! You can now Log In.")
-        except Exception: 
-            st.sidebar.error("Signup failed. Check SQL Trigger configuration.")
-    st.info("👈 Please log in via the sidebar to start.")
+            # Step 1: Create the Auth User
+            res = supabase.auth.sign_up({"email": e, "password": p})
+            if res.user:
+                # Step 2: Attempt to create the profile row directly from the app
+                # This acts as a backup in case the Trigger fails
+                try:
+                    supabase.table("profiles").insert({"id": res.user.id, "credits": 5, "tier": "free"}).execute()
+                except:
+                    pass # Row might already exist due to trigger
+                st.sidebar.success("Signup successful! Please log in.")
+        except Exception as err:
+            st.sidebar.error(f"Signup Error: {str(err)}")
+    
+    st.info("👈 Please use the sidebar to access your account.")
     st.stop()
 
 # --- 6. MAIN INTERFACE ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# Silent Repair: If profile is missing, attempt to create it
+# Force profile creation for existing users who hit the "Profile not found" error
 if not profile:
     try:
-        supabase.table("profiles").upsert({"id": user.id, "credits": 5, "tier": "free", "used_this_month": 0}).execute()
+        supabase.table("profiles").upsert({"id": user.id, "credits": 5, "tier": "free"}).execute()
         profile = get_user_profile(user.id)
-    except:
+    except Exception:
         st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-        st.error("Account Syncing... Please refresh the page.")
+        st.error("Profile sync error. Please check your Supabase RLS policies.")
         if st.sidebar.button("Log Out"):
             st.session_state.clear()
             st.rerun()
         st.stop()
 
-st.sidebar.title("Your Account")
+st.sidebar.title("Dashboard")
 st.sidebar.write(f"**Email:** {user.email}")
 st.sidebar.write(f"**Credits:** {profile.get('credits', 0)}")
 if st.sidebar.button("Log Out"):
@@ -135,8 +145,11 @@ if uploaded_file and st.button("Generate 4x6 Labels"):
             try:
                 new_count = profile.get('credits', 0) - 1
                 supabase.table("profiles").update({"credits": new_count}).eq("id", user.id).execute()
-                st.success(f"Success! Found {len(items)} items.")
-                st.download_button("📥 Download 4x6 PDF", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
-            except: st.error("Credit update failed. Please check RLS policies.")
-        else: st.error("No items found in PDF.")
-    else: st.error("No credits remaining.")
+                st.success(f"Successfully processed {len(items)} items.")
+                st.download_button("📥 Download PDF", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
+            except Exception:
+                st.error("Failed to update credits. Please try again.")
+        else:
+            st.error("No items found in PDF.")
+    else:
+        st.error("No credits remaining.")
