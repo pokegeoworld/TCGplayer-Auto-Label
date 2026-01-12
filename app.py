@@ -13,7 +13,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (PROMINENT BRANDING) ---
+# --- 3. STYLING (48PX PROMINENT TITLE) ---
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -51,6 +51,7 @@ def extract_tcg_data(uploaded_file):
 
 def create_label_pdf(items):
     packet = io.BytesIO()
+    # 4x6 Dimensions
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y, lh = 0.25*inch, 5.75*inch, 0.25*inch
     can.setFont("Helvetica-Bold", 14)
@@ -90,9 +91,8 @@ if "user" not in st.session_state:
             
     if signup_btn:
         try:
-            # Trigger in SQL now handles profile creation
             supabase.auth.sign_up({"email": e, "password": p})
-            st.sidebar.success("Account created! Log in now.")
+            st.sidebar.success("Account created! You can now Log In.")
         except Exception as err: st.sidebar.error(f"Error: {str(err)}")
     st.stop()
 
@@ -100,24 +100,21 @@ if "user" not in st.session_state:
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# If profile is missing, it means the SQL trigger wasn't run or failed.
 if not profile:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-    st.error("Profile not found. Please run the SQL Trigger script in Supabase.")
+    st.error("Profile not found. Please ensure you have added the Database Trigger in Supabase.")
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
     st.stop()
 
-# Sidebar
-st.sidebar.title("Account")
-st.sidebar.write(f"**Email:** {user.email}")
+st.sidebar.title("Dashboard")
+st.sidebar.write(f"**User:** {user.email}")
 st.sidebar.write(f"**Credits:** {profile.get('credits', 0)}")
 if st.sidebar.button("Log Out"):
     st.session_state.clear()
     st.rerun()
 
-# Prominent Title
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip PDF", type="pdf")
@@ -128,15 +125,13 @@ if uploaded_file and st.button("Generate 4x6 Labels"):
         if items:
             pdf_bytes = create_label_pdf(items)
             try:
-                # Deduct credits
                 new_count = profile.get('credits', 0) if profile.get('tier') == "unlimited" else profile.get('credits', 0) - 1
                 supabase.table("profiles").update({"credits": new_count}).eq("id", user.id).execute()
-                
-                st.success(f"Formatted {len(items)} items for 4x6 print.")
-                st.download_button("📥 Download PDF", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
+                st.success(f"Success! Found {len(items)} items.")
+                st.download_button("📥 Download Labels", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
             except Exception as e:
-                st.error(f"Database Error: {e}")
+                st.error(f"Credit Update Failed: {e}")
         else:
-            st.error("No card data found in PDF.")
+            st.error("No items found in PDF.")
     else:
         st.error("No credits remaining.")
