@@ -12,13 +12,12 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (FORCE LARGE FONTS & BUTTONS) ---
+# --- 3. STYLING (MASSIVE FONTS & NO /MO) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     
-    /* Pricing Card - Massive Text */
     .pricing-card { 
         border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; 
         text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
@@ -29,17 +28,18 @@ st.markdown("""
         margin: 45px auto 25px auto; font-size: 35px !important; 
     }
     
+    /* ULTRA LARGE FONT SIZES - NO /MO */
     .big-stat { font-size: 75px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 28px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 5px; }
     .small-price { font-size: 30px !important; color: #374151; font-weight: 800; margin-bottom: 25px; }
     .tier-name { font-size: 24px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; }
     
-    /* Force Buttons */
+    /* Button Styling */
     .stButton>button { width: 100% !important; border-radius: 10px; font-weight: 800; height: 60px; font-size: 22px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. FUNCTIONS ---
+# --- 4. CORE FUNCTIONS ---
 def get_user_profile(user_id):
     try:
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -84,25 +84,27 @@ def trigger_auto_download(pdf_bytes, filename):
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION (SIDE-BY-SIDE BUTTONS RESTORED) ---
+# --- 5. AUTHENTICATION (SIDE-BY-SIDE BUTTONS & NO DELAY) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    with st.sidebar.form("auth"):
-        e, p = st.text_input("Email"), st.text_input("Password", type="password")
-        c1, c2 = st.columns(2)
-        if c1.form_submit_button("Log In"):
-            try:
-                res = supabase.auth.sign_in_with_password({"email": e, "password": p})
-                if res.user:
-                    st.session_state.user = res.user
-                    st.rerun() # Fixed: Single-click login
-            except: st.error("Login failed.")
-        if c2.form_submit_button("Sign Up"):
-            try:
-                supabase.auth.sign_up({"email": e, "password": p})
-                st.success("Signed up! Please Log In.")
-            except: st.error("Signup failed.")
+    email = st.sidebar.text_input("Email")
+    password = st.sidebar.text_input("Password", type="password")
+    
+    c1, c2 = st.sidebar.columns(2)
+    if c1.button("Log In"):
+        try:
+            res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            if res.user:
+                st.session_state.user = res.user
+                st.rerun() # Immediate rerun to lock session
+        except: st.sidebar.error("Login failed.")
+            
+    if c2.button("Sign Up"):
+        try:
+            supabase.auth.sign_up({"email": email, "password": password})
+            st.sidebar.success("Success! Click Log In.")
+        except: st.sidebar.error("Signup failed.")
     st.stop()
 
 # --- 6. MAIN APP LOGIC ---
@@ -117,7 +119,7 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING VIEW (MASSIVE FONTS) ---
+# --- 7. PRICING VIEW (CORRECTED FONT & NO /MO) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
