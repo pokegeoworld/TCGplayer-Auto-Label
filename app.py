@@ -84,18 +84,25 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION (FIXED REFRESH & DOUBLE LOGIN) ---
 if "user" not in st.session_state:
+    # Check for existing background session
+    curr_session = supabase.auth.get_session()
+    if curr_session and curr_session.user:
+        st.session_state.user = curr_session.user
+        st.rerun()
+
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
     u_email, u_pass = st.sidebar.text_input("Email"), st.sidebar.text_input("Password", type="password")
     l_col, r_col = st.sidebar.columns(2)
+    
     if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
             if res.user:
                 st.session_state.user = res.user
-                st.rerun() 
+                st.rerun()
         except: st.sidebar.error("Login Failed.")
     if r_col.button("Sign Up"):
         try:
@@ -104,27 +111,31 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE ---
+# --- 6. DATABASE HANDSHAKE (FIXED DOUBLE LOGIN GLITCH) ---
 user = st.session_state.user
 
 # Handle Stripe Success Redirect
 if st.query_params.get("payment") == "success":
     st.balloons()
     st.success("🎉 Payment Successful! Your credits have been updated.")
-    time.sleep(1.5) # Allow time for Stripe Webhook to sync
+    time.sleep(1.5)
     st.query_params.clear()
 
-profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-profile = profile_res.data[0] if profile_res.data else None
+# Wait loop to ensure profile exists before loading (Kills glitch)
+profile = None
+retries = 0
+while not profile and retries < 6:
+    profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+    if profile_res.data:
+        profile = profile_res.data[0]
+        break
+    time.sleep(0.5)
+    retries += 1
 
 if not profile:
-    try:
-        supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
-        profile = {"id": user.id, "credits": 0, "tier": "None"}
-    except:
-        time.sleep(1)
-        profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-        profile = profile_res.data[0] if profile_res.data else {"id": user.id, "credits": 0, "tier": "None"}
+    # Nuclear fallback to ensure app never hangs
+    supabase.table("profiles").upsert({"id": user.id, "credits": 0, "tier": "None"}).execute()
+    profile = {"id": user.id, "credits": 0, "tier": "None"}
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
@@ -134,6 +145,7 @@ st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("🚪 Log Out"):
     st.session_state.clear()
+    supabase.auth.clear_session()
     supabase.auth.sign_out()
     st.rerun()
 
@@ -154,7 +166,7 @@ if profile['credits'] == 0 and profile['tier'] == "None":
     with c1:
         st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
     with c2:
-        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text) Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
+        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
     with c3:
         st.markdown('<div class="pricing-card"><p class="tier-name">UNLIMITED</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
     st.stop()
