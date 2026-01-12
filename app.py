@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (68PX TITLE & WIDE SIDEBAR) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
@@ -119,26 +119,29 @@ uploaded_file = st.file_uploader("Step 1: Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
     if profile['credits'] > 0:
+        # Check if we already generated the PDF to avoid extra processing
         items, order_no = extract_tcg_data(uploaded_file)
         if items:
-            # Generate the PDF and store it in memory for the button
             pdf_result = create_label_pdf(items)
             filename = f"TCGplayer_{order_no}.pdf"
             
             st.success(f"Label ready for Order {order_no}")
             
-            # The download button MUST be the final step to trigger the browser's download prompt
-            if st.download_button(
+            # Use the data directly in the download button. 
+            # Note: We deduct the credit BEFORE the button appears to ensure the state is locked.
+            if f"downloaded_{order_no}" not in st.session_state:
+                new_c = profile['credits'] - 1
+                supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
+                st.session_state[f"downloaded_{order_no}"] = True
+                st.rerun()
+
+            st.download_button(
                 label="Step 2: Click to Download Label",
                 data=pdf_result,
                 file_name=filename,
                 mime="application/pdf",
                 use_container_width=True
-            ):
-                # Only deduct credit AFTER the user successfully initiates the download
-                new_c = profile['credits'] - 1
-                supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
-                st.rerun()
+            )
         else:
             st.error("No item data found. Check PDF format.")
     else:
