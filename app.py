@@ -14,27 +14,24 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (UNCHANGED STABLE LAYOUT) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .pricing-card { border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); min-height: 380px; display: flex; flex-direction: column; justify-content: center; }
     .sub-header { background: #3B82F6; color: white; padding: 25px; border-radius: 12px; text-align: center; font-weight: 900; margin: 40px auto 25px auto; font-size: 40px !important; text-transform: uppercase; }
-    .free-trial-large { font-size: 65px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 20px; }
-    .big-stat { font-size: 90px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
-    .label-text { font-size: 35px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 15px; }
-    .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
-    .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
     
-    /* Manual Button Styling */
+    /* Massive Green Action Button */
     .stDownloadButton > button {
         background-color: #22c55e !important;
         color: white !important;
-        font-size: 24px !important;
-        height: 80px !important;
-        font-weight: 800 !important;
-        border-radius: 12px !important;
+        font-size: 30px !important;
+        height: 120px !important;
+        font-weight: 900 !important;
+        border-radius: 20px !important;
+        border: 3px solid #14532d !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
     }
     
     div.stButton > button, div.stLinkButton > a { width: 100% !important; border-radius: 12px !important; font-weight: 800 !important; height: 75px !important; font-size: 24px !important; background-color: #1E3A8A !important; color: white !important; display: flex !important; align-items: center !important; justify-content: center !important; text-decoration: none !important; border: none !important; }
@@ -46,14 +43,14 @@ def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     
-    # 1. Address Section (18pt Bold)
+    # 1. Top Section (18pt Bold)
     can.setFont("Helvetica-Bold", 18)
     y = 5.7 * inch
     can.drawString(0.25*inch, y, data['buyer_name']); y -= 0.25*inch
     can.drawString(0.25*inch, y, data['address']); y -= 0.25*inch
     can.drawString(0.25*inch, y, data['city_state_zip']); y -= 0.3*inch
     
-    # Dash Line 1
+    # Cut Line 1
     can.setDash(3, 3)
     can.line(0.25*inch, y, 3.75*inch, y); y -= 0.25*inch
     can.setDash()
@@ -66,7 +63,7 @@ def create_label_pdf(data, items):
     can.drawString(0.25*inch, y, f"Seller Name: {data['seller']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Order Number: {data['order_no']}"); y -= 0.2*inch
     
-    # Dash Line 2
+    # Cut Line 2
     can.setDash(3, 3)
     can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch
     can.setDash()
@@ -80,6 +77,7 @@ def create_label_pdf(data, items):
     for item in items:
         p_desc = Paragraph(item['desc'], styleN)
         table_data.append([item['qty'], p_desc, item['price'], item['total']])
+    
     table = Table(table_data, colWidths=[0.4*inch, 2.1*inch, 0.5*inch, 0.5*inch])
     table.setStyle(TableStyle([
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
@@ -91,27 +89,27 @@ def create_label_pdf(data, items):
     can.save(); packet.seek(0)
     return packet
 
-# --- 5. DATA EXTRACTION (TAILORED TO ATTACHED PDF) ---
+# --- 5. DATA EXTRACTION (Jesus Romero Sample Fix) ---
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
     lines = [l.strip() for l in text.split('\n') if l.strip()]
     
     try:
-        # [cite_start]Based on the uploaded sample positions [cite: 23, 24, 25, 26, 27, 33]
+        # [cite_start]Targeting specific line indices from the new Jesus Romero sample [cite: 14-17]
+        ship_to_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line)
         data = {
-            'buyer_name': lines[1], # Jesus Romero
-            'address': lines[2],    # 737 1/2 Watson Ave
-            'city_state_zip': lines[3], # Wilmington, CA 90744
+            'buyer_name': lines[ship_to_idx + 1],
+            'address': lines[ship_to_idx + 2],
+            'city_state_zip': lines[ship_to_idx + 3],
             'date': re.search(r"Order Date:\s*,\s*\"([\d/]+)\"", text).group(1),
             'method': re.search(r"Shipping Method:\s*,\s*\"([\s\S]*?)\"", text).group(1).strip(),
-            'buyer_name_meta': re.search(r"Buyer Name:\s*,\s*\"([\s\S]*?)\"", text).group(1).strip(),
             'seller': "ThePokeGeo",
             'order_no': re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
         }
         
-        # [cite_start]Item Extraction [cite: 34]
         items = []
+        # [cite_start]Pattern captures QTY, Desc, Price, Total from CSV-style table in PDF [cite: 25]
         item_matches = re.findall(r'"(\d+)"\s*,\s*"([\s\S]*?)"\s*,\s*"\s*\\\$([\d\.]+)"\s*,\s*"\s*\\\$([\d\.]+)"', text)
         for m in item_matches:
             items.append({'qty': m[0], 'desc': m[1].replace('\n', ' ').strip(), 'price': f"${m[2]}", 'total': f"${m[3]}"})
@@ -136,9 +134,6 @@ if "user" not in st.session_state:
 # --- 7. MAIN APP DASHBOARD ---
 user = st.session_state.user
 profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
-if not profile:
-    supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
-    profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
 
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
@@ -175,19 +170,24 @@ st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_all
 uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
-    if profile['tier'] == 'Unlimited' or profile['credits'] > 0:
-        h_data, i_list = extract_tcg_data(uploaded_file)
-        if h_data:
+    h_data, i_list = extract_tcg_data(uploaded_file)
+    if h_data:
+        if profile['tier'] == 'Unlimited' or profile['credits'] > 0:
+            
+            # Generate the PDF file
             pdf_result = create_label_pdf(h_data, i_list)
-            filename = f"TCGplayer_{h_data['order_no']}.pdf"
             
-            # Auto-download
-            if f"dl_{h_data['order_no']}" not in st.session_state:
-                if profile['tier'] != 'Unlimited': 
+            # Massive Green Button for guaranteed browser-approved download
+            st.download_button(
+                label=f"✅ DOWNLOAD LABEL: {h_data['order_no']}",
+                data=pdf_result,
+                file_name=f"TCGplayer_{h_data['order_no']}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                on_click=lambda: (
                     supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
-                st.session_state[f"dl_{h_data['order_no']}"] = True
-                b64 = base64.b64encode(pdf_result.getvalue()).decode()
-                st.components.v1.html(f'<a id="autodl" href="data:application/pdf;base64,{b64}" download="{filename}"></a><script>setTimeout(() => {{ document.getElementById("autodl").click(); }}, 500);</script>', height=0)
-            
-            # Backup Download Button
-            st.download_button("📥 DOWNLOAD LABEL (BACKUP)", data=pdf_result, file_name=filename, mime="application/pdf", use_container_width=True)
+                    if profile['tier'] != 'Unlimited' else None
+                )
+            )
+        else:
+            st.error("Out of credits.")
