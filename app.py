@@ -12,48 +12,42 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (ENHANCED PRICING TEXT) ---
+# --- 3. STYLING (ULTRA-LARGE PRICING TEXT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
     .hero-title { color: #1E3A8A; font-size: 68px; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .hero-subtitle { color: #4B5563; font-size: 20px; text-align: center; margin-bottom: 30px; }
     
+    /* Massive Pricing Cards */
     .pricing-card { 
-        border: 1px solid #e1e4e8; 
-        padding: 35px 15px; 
-        border-radius: 12px; 
+        border: 2px solid #e1e4e8; 
+        padding: 40px 20px; 
+        border-radius: 15px; 
         text-align: center; 
         background: white; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        min-height: 320px;
+        box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
+        min-height: 360px;
     }
     
-    .sub-header {
-        background: linear-gradient(90deg, #1E3A8A, #3B82F6);
-        color: white; 
-        padding: 15px; 
-        border-radius: 10px;
-        text-align: center; 
-        font-weight: 800; 
-        margin: 40px auto 20px auto; 
-        font-size: 24px;
-        max-width: 800px;
+    .sub-header { 
+        background: linear-gradient(90deg, #1E3A8A, #3B82F6); 
+        color: white; padding: 20px; border-radius: 12px; 
+        text-align: center; font-weight: 900; margin: 45px auto 25px auto; 
+        font-size: 32px; max-width: 900px; 
     }
     
-    /* Bigger Label Counts */
-    .big-stat { font-size: 42px; font-weight: 900; color: #1E3A8A; margin: 15px 0 5px 0; line-height: 1; }
+    /* ULTRA LARGE FONT SIZES */
+    .big-stat { font-size: 54px; font-weight: 900; color: #1E3A8A; margin: 15px 0 0 0; line-height: 1; }
+    .label-text { font-size: 24px; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
+    .small-price { font-size: 28px; color: #374151; font-weight: 800; margin-bottom: 30px; }
+    .tier-name { font-size: 22px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: 2px; }
     
-    /* Bigger Price Text */
-    .small-price { font-size: 22px; color: #4B5563; font-weight: 600; margin-bottom: 25px; }
-    
-    .tier-name { font-size: 20px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 1.5px; }
-    
-    .stButton>button { width: 100%; border-radius: 8px; font-weight: 700; height: 50px; font-size: 18px; }
+    .stButton>button { width: 100%; border-radius: 10px; font-weight: 800; height: 60px; font-size: 22px; background-color: #1E3A8A; color: white; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. FUNCTIONS ---
+# --- 4. CORE LOGIC FUNCTIONS ---
 def get_user_profile(user_id):
     try:
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -79,16 +73,13 @@ def create_label_pdf(items):
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     x, y = 0.25*inch, 5.7*inch
     can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
-    y -= 0.4*inch
-    can.setFont("Helvetica", 10)
+    y -= 0.4*inch; can.setFont("Helvetica", 10)
     for qty, desc in items:
-        if y < 0.5*inch:
-            can.showPage(); y = 5.7*inch; can.setFont("Helvetica", 10)
+        if y < 0.5*inch: can.showPage(); y = 5.7*inch; can.setFont("Helvetica", 10)
         full_text, limit = f"[{qty}x] {desc}", 3.5 * inch
         words, line = full_text.split(), ""
         for word in words:
-            if can.stringWidth(line + word + " ", "Helvetica", 10) < limit:
-                line += word + " "
+            if can.stringWidth(line + word + " ", "Helvetica", 10) < limit: line += word + " "
             else:
                 can.drawString(x, y, line.strip()); y -= 0.15*inch; line = word + " "
         can.drawString(x, y, line.strip()); y -= 0.25*inch
@@ -101,71 +92,66 @@ def trigger_auto_download(pdf_bytes, filename):
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION (ISOLATED FOR 1-CLICK SUCCESS) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
+    st.sidebar.title("Login / Register")
     with st.sidebar.form("auth"):
         e, p = st.text_input("Email"), st.text_input("Password", type="password")
-        c1, c2 = st.columns(2)
-        if c1.form_submit_button("Log In"):
+        if st.form_submit_button("Log In"):
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
-                if res.user: 
+                if res.user:
                     st.session_state.user = res.user
-                    st.rerun() 
+                    st.rerun() # Immediate rerun to lock session
             except: st.error("Login failed.")
-        if c2.form_submit_button("Sign Up"):
+        if st.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
-                st.success("Success! Please Log In.")
+                st.success("Account created! Please Log In.")
             except: st.error("Signup failed.")
     st.stop()
 
-# --- 6. MAIN DASHBOARD ---
+# --- 6. DATABASE SYNC ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 if not profile:
     try:
         supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
         profile = get_user_profile(user.id)
-    except: st.error("Sync error."); st.stop()
+    except: st.error("Sync Error."); st.stop()
 
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (LARGER FONTS) ---
+# --- 7. PRICING WALL (ULTRA VISIBLE) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
-    
-    col_spacer_left, colA, colB, col_spacer_right = st.columns([1, 4, 4, 1])
+    colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Free Trial</p><p class="big-stat">5 Labels</p><p class="small-price">$0 One-Time</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Free Trial</p><p class="big-stat">5</p><p class="label-text">Auto Labels</p><p class="small-price">$0 One-Time</p></div>', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
             supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute()
             st.rerun()
     with colB:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10 Labels</p><p class="small-price">$0.50 One-Time</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Auto Labels</p><p class="small-price">$0.50 One-Time</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/test_5kQfZjgJ67x66ot5kW5J601")
 
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
-    
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Basic</p><p class="big-stat">50 Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Basic</p><p class="big-stat">50</p><p class="label-text">Labels/mo</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Basic", "https://buy.stripe.com/test_4gM28t0K8dVueUZdRs5J602")
     with c2:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Pro</p><p class="big-stat">150 Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Pro</p><p class="big-stat">150</p><p class="label-text">Labels/mo</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Pro", "https://buy.stripe.com/test_bJe9AV9gE3gQeUZeVw5J603")
     with c3:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Unlimited</p><p class="big-stat">∞ Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Unlimited</p><p class="big-stat">∞</p><p class="label-text">Labels/mo</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Unlimited", "https://buy.stripe.com/test_9B600ldwU5oY5kp8x85J604")
     st.stop()
 
-# --- 8. LABEL CREATOR ---
-st.sidebar.write(f"Plan: **{profile['tier']}**")
-st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
-
+# --- 8. CREATOR VIEW ---
+st.sidebar.write(f"Plan: **{profile['tier']}** | Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
@@ -175,9 +161,9 @@ if uploaded_file:
         if items:
             pdf_result = create_label_pdf(items)
             filename = f"TCGplayer_{order_no}.pdf"
-            if f"last_dl_{order_no}" not in st.session_state:
+            if f"dl_{order_no}" not in st.session_state:
                 if profile['tier'] != 'Unlimited':
                     supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
-                st.session_state[f"last_dl_{order_no}"] = True
+                st.session_state[f"dl_{order_no}"] = True
                 trigger_auto_download(pdf_result, filename)
             st.download_button("📥 Download Label", data=pdf_result, file_name=filename, mime="application/pdf", use_container_width=True)
