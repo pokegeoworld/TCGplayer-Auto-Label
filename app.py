@@ -12,14 +12,14 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (68PX TITLE & 450PX SIDEBAR) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
     .hero-title { color: #1E3A8A; font-size: 68px; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .hero-subtitle { color: #4B5563; font-size: 20px; text-align: center; margin-bottom: 30px; }
-    div[data-testid="stForm"] small { display: none !important; }
-    .stButton>button { width: 100%; border-radius: 5px; }
+    .pricing-card { border: 1px solid #ddd; padding: 20px; border-radius: 10px; text-align: center; background: #f9f9f9; height: 100%; }
+    .stButton>button { width: 100%; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -79,7 +79,6 @@ if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
     with st.sidebar.form("auth"):
-        st.subheader("Account Access")
         e, p = st.text_input("Email"), st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
         if c1.form_submit_button("Log In"):
@@ -97,49 +96,69 @@ if "user" not in st.session_state:
 # --- 6. MAIN DASHBOARD ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
+
 if not profile:
     try:
-        # Maintaining 10 initial credits and Free tier
-        supabase.table("profiles").insert({"id": user.id, "credits": 10, "tier": "Free"}).execute()
+        # Adjusted default to 5 credits and 'New' status
+        supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
         profile = get_user_profile(user.id)
     except: st.error("Sync error."); st.stop()
 
-# --- SIDEBAR: SUBSCRIPTION & BILLING ---
-st.sidebar.title("💳 Subscription & Billing")
-st.sidebar.markdown(f"**Current Plan:** {profile.get('tier', 'Free')}")
-st.sidebar.markdown(f"**Credits Available:** {profile['credits']}")
-st.sidebar.markdown("---")
-
-st.sidebar.subheader("Upgrade Your Plan")
-if st.sidebar.button("Pro Tier - $9.99/mo (Unlimited)"):
-    st.sidebar.info("Stripe Payment Link would go here.")
-
-if st.sidebar.button("Add 50 Credits - $4.99"):
-    st.sidebar.info("Stripe Checkout Link would go here.")
-
-st.sidebar.markdown("---")
+# LOGOUT BUTTON ALWAYS VISIBLE
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- MAIN CONTENT ---
-st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
+# --- 7. PRICING WALL (If Tier is 'New') ---
+if profile.get('tier') == 'New':
+    st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">Select a plan to start generating labels</p>', unsafe_allow_html=True)
+    
+    colA, colB = st.columns(2)
+    with colA:
+        st.markdown('<div class="pricing-card"><h3>Free Trial</h3><h1>$0</h1><p>5 Auto Labels</p></div>', unsafe_allow_html=True)
+        if st.button("Activate Free Trial"):
+            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute()
+            st.rerun()
+            
+    with colB:
+        st.markdown('<div class="pricing-card"><h3>Starter Pack</h3><h1>$0.50</h1><p>10 Auto Labels</p></div>', unsafe_allow_html=True)
+        if st.button("Buy Starter Pack"):
+            st.info("Redirecting to Stripe...")
 
-uploaded_file = st.file_uploader("Upload TCGplayer PDF to Auto-Download Label", type="pdf")
+    st.markdown("---")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown('<div class="pricing-card"><h3>Basic</h3><h1>$1.49/mo</h1><p>50 Labels/mo</p></div>', unsafe_allow_html=True)
+        if st.button("Choose Basic"): st.info("Stripe Link...")
+    with c2:
+        st.markdown('<div class="pricing-card"><h3>Pro</h3><h1>$1.99/mo</h1><p>150 Labels/mo</p></div>', unsafe_allow_html=True)
+        if st.button("Choose Pro"): st.info("Stripe Link...")
+    with c3:
+        st.markdown('<div class="pricing-card"><h3>Unlimited</h3><h1>$2.99/mo</h1><p>No Limits</p></div>', unsafe_allow_html=True)
+        if st.button("Choose Unlimited"): st.info("Stripe Link...")
+    st.stop()
+
+# --- 8. LABEL CREATOR (If Plan Active) ---
+st.sidebar.title("💳 Account")
+st.sidebar.write(f"Plan: **{profile['tier']}**")
+st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
+
+st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
-    if profile['credits'] > 0:
+    # Logic for Unlimited or remaining credits
+    if profile['tier'] == 'Unlimited' or profile['credits'] > 0:
         items, order_no = extract_tcg_data(uploaded_file)
         if items:
             pdf_result = create_label_pdf(items)
             filename = f"TCGplayer_{order_no}.pdf"
             if f"last_dl_{order_no}" not in st.session_state:
-                new_c = profile['credits'] - 1
-                supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
+                if profile['tier'] != 'Unlimited':
+                    new_c = profile['credits'] - 1
+                    supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
                 st.session_state[f"last_dl_{order_no}"] = True
                 trigger_auto_download(pdf_result, filename)
-                st.success(f"Deducted 1 credit. Processing Order: {order_no}")
-            
-            st.download_button(label="📥 Download Ready - Click if it didn't start", data=pdf_result, file_name=filename, mime="application/pdf", use_container_width=True)
-        else: st.error("No item data found. Check PDF format.")
-    else: st.error("Out of credits. Upgrade your plan in the sidebar to continue.")
+            st.download_button("📥 Download Label", data=pdf_result, file_name=filename, mime="application/pdf", use_container_width=True)
+        else: st.error("No item data found.")
+    else: st.error("Out of credits. Please upgrade your plan.")
