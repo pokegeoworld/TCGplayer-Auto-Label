@@ -28,12 +28,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE PERFECTED PDF CREATOR (EXACT ORDER REQUESTED) ---
+# --- 4. THE PERFECTED PDF CREATOR ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     
-    # 1. Customer Name & Address (18pt Font)
+    # 1. Customer Name & Address (Requested 18pt Font)
     can.setFont("Helvetica-Bold", 18)
     y = 5.7*inch
     can.drawString(0.25*inch, y, data['name']); y -= 0.3*inch
@@ -104,7 +104,7 @@ if "user" not in st.session_state:
         res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
         if res.user: 
             st.session_state.user = res.user
-            st.rerun() # Forces the app to recognize the session immediately
+            st.rerun() 
     if r_col.button("Sign Up"):
         supabase.auth.sign_up({"email": u_email, "password": u_pass})
         st.sidebar.success("Account Created! Click Log In.")
@@ -117,7 +117,11 @@ if not profile:
     supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
     profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
 
-if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+# --- SIDEBAR ACCOUNT TOOLS ---
+st.sidebar.markdown("---")
+st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
+if st.sidebar.button("🚪 Log Out"):
+    st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
 # --- 8. PRICING VIEW ---
 if profile.get('tier') == 'New':
