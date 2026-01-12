@@ -32,7 +32,6 @@ st.markdown("""
         text-align: center;
         padding-bottom: 30px;
     }
-    /* Hides the "Press Enter to submit form" text */
     div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -91,30 +90,22 @@ if "user" not in st.session_state:
             
     if signup_btn:
         try:
-            # Trigger in Supabase handles profile creation automatically
             supabase.auth.sign_up({"email": e, "password": p})
             st.sidebar.success("Account created! You can now Log In.")
-        except Exception as err: st.sidebar.error("Could not create account. Please try again.")
-    
-    st.info("👈 Please log in via the sidebar to start.")
+        except Exception: st.sidebar.error("Signup failed. Ensure only the 'Definer' trigger exists.")
     st.stop()
 
 # --- 6. MAIN INTERFACE ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# If profile is missing, try a silent creation
 if not profile:
-    try:
-        supabase.table("profiles").upsert({"id": user.id, "credits": 5, "tier": "free"}).execute()
-        profile = get_user_profile(user.id)
-    except:
-        st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-        st.error("Account Syncing... Please refresh the page in a moment.")
-        if st.sidebar.button("Log Out"):
-            st.session_state.clear()
-            st.rerun()
-        st.stop()
+    st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
+    st.error("Account Syncing... Please refresh the page.")
+    if st.sidebar.button("Log Out"):
+        st.session_state.clear()
+        st.rerun()
+    st.stop()
 
 st.sidebar.title("Your Account")
 st.sidebar.write(f"**Email:** {user.email}")
@@ -137,12 +128,8 @@ if uploaded_file and st.button("Generate 4x6 Labels"):
                 is_unlimited = profile.get('tier') == "unlimited"
                 new_count = profile.get('credits', 0) if is_unlimited else profile.get('credits', 0) - 1
                 supabase.table("profiles").update({"credits": new_count}).eq("id", user.id).execute()
-                
                 st.success(f"Success! Found {len(items)} items.")
                 st.download_button("📥 Download 4x6 PDF", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
-            except Exception as e:
-                st.error("Credit Update Failed. Please try again.")
-        else:
-            st.error("No items found in PDF.")
-    else:
-        st.error("No credits remaining.")
+            except: st.error("Credit update failed.")
+        else: st.error("No items found in PDF.")
+    else: st.error("No credits remaining.")
