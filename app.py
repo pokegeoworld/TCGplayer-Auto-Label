@@ -9,13 +9,11 @@ from reportlab.lib.units import inch
 from reportlab.lib.utils import simpleSplit
 
 # --- 1. DATABASE CONNECTION ---
-# These pull from your Streamlit "Secrets" menu
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
 # --- 2. CONFIGURATION ---
-# This forces the sidebar to stay open so users see the Login/Balance immediately
 st.set_page_config(
     page_title="TCGplayer Auto Label", 
     page_icon="🎴",
@@ -25,7 +23,6 @@ st.set_page_config(
 # --- 3. AUTHENTICATION & BALANCES ---
 st.sidebar.title("Settings & Account")
 
-# Helper function to get user data from your 'profiles' table
 def get_user_profile(user_id):
     try:
         response = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -33,7 +30,6 @@ def get_user_profile(user_id):
     except Exception:
         return None
 
-# Sidebar Authentication Logic
 if "user" not in st.session_state:
     st.sidebar.subheader("Login / Signup")
     email = st.sidebar.text_input("Email")
@@ -41,7 +37,6 @@ if "user" not in st.session_state:
     
     col1, col2 = st.sidebar.columns(2)
     
-    # LOG IN BUTTON
     if col1.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": email, "password": password})
@@ -50,14 +45,12 @@ if "user" not in st.session_state:
         except Exception:
             st.sidebar.error("Invalid email or password.")
             
-    # SIGN UP BUTTON
     if col2.button("Sign Up"):
         try:
-            # This triggers the 'handle_new_user' SQL function to give 5 free credits
             res = supabase.auth.sign_up({"email": email, "password": password})
             st.sidebar.success("Account created! You can now Log In.")
         except Exception:
-            st.sidebar.error("Signup failed. Email may already exist.")
+            st.sidebar.error("Signup failed. Check Supabase Auth settings.")
     st.stop()
 
 # --- 4. LOGGED-IN VIEW ---
@@ -70,57 +63,8 @@ if profile:
     used = profile.get("used_this_month", 0)
     
     st.sidebar.write(f"Logged in as: **{user.email}**")
-    st.sidebar.markdown(f"**Plan:** {tier.upper()}")
     
-    # Determine remaining labels and if user is allowed to print
     can_print = False
     if tier == "unlimited":
-        st.sidebar.success("Unlimited Access Active")
-        can_print = True
-    elif tier == "standard":
-        left = 150 - used
-        st.sidebar.info(f"Monthly Labels: {max(0, left)} / 150")
-        can_print = left > 0
-    elif tier == "basic":
-        left = 50 - used
-        st.sidebar.info(f"Monthly Labels: {max(0, left)} / 50")
-        can_print = left > 0
-    else:
-        # Starter Credits (Free Trial or purchased $0.50 packs)
-        st.sidebar.info(f"Starter Credits: {credits}")
-        can_print = credits > 0
-
-    if not can_print:
-        st.error("⚠️ Label limit reached.")
-        st.info("Upgrade your plan or buy a $0.50 Starter Pack (10 Labels).")
-        st.stop()
-        
-    if st.sidebar.button("Log Out"):
-        supabase.auth.sign_out()
-        del st.session_state.user
-        st.rerun()
-
-# --- 5. MAIN APP LOGIC ---
-st.title("🎴 TCGplayer Auto Labeler")
-st.write("Upload your packing slip to generate organized pull labels.")
-
-uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip (PDF)", type="pdf")
-
-if uploaded_file is not None:
-    if st.button("Generate & Print Labels"):
-        
-        # 1. Update Database (Charge the user for usage)
-        if profile['tier'] == 'free':
-            # Subtract 1 from their one-time credit balance
-            supabase.table("profiles").update({"credits": credits - 1}).eq("id", user.id).execute()
-        else:
-            # Add 1 to their monthly usage count
-            supabase.table("profiles").update({"used_this_month": used + 1}).eq("id", user.id).execute()
-        
-        # 2. PDF PROCESSING
-        # [Your existing PDF logic should remain here]
-        
-        st.success("Label processed! Your balance has been updated.")
-        
-        # Trigger a rerun so the sidebar balance updates immediately
-        st.rerun()
+        st.sidebar.markdown("**Plan:** UNLIMITED")
+        st.sidebar.success("Unlimited Access
