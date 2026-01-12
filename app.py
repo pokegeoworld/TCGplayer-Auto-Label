@@ -14,12 +14,13 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (PERFECTED HIGH-IMPACT UI) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     .pricing-card { border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); min-height: 380px; display: flex; flex-direction: column; justify-content: center; }
+    .free-trial-large { font-size: 65px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 20px; }
     .big-stat { font-size: 90px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 35px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 15px; }
     .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
@@ -45,7 +46,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE PDF CREATOR (22PT TOP-ALIGNED ADDRESS) ---
+# --- 4. THE DYNAMIC PDF CREATOR (22PT TOP-ALIGNED ADDRESS) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -83,7 +84,7 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (SEQUENTIAL) ---
+# --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -103,25 +104,30 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (FAILSAFE SYNC) ---
+# --- 6. DATABASE HANDSHAKE (BULLETPROOF SYNC) ---
 user = st.session_state.user
 profile = None
-retries = 0
+# Attempt to fetch profile immediately
+profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 
-# Failsafe: Wait for SQL Trigger to finish profile creation
-while not profile and retries < 6:
-    profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-    if profile_res.data:
-        profile = profile_res.data[0]
-        break
-    time.sleep(0.5)
-    retries += 1
+if profile_res.data:
+    profile = profile_res.data[0]
+else:
+    # If fetch fails, try a manual insert fallback to ensure session continuity
+    try:
+        supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
+        time.sleep(1) 
+        profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+        if profile_res.data: profile = profile_res.data[0]
+    except:
+        # If insert fails, it likely already exists from the trigger but is lagging. Wait once.
+        time.sleep(1.5)
+        profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+        if profile_res.data: profile = profile_res.data[0]
 
 if not profile:
-    st.error("Profile synchronization error. Please log out and back in.")
-    if st.button("Logout"):
-        st.session_state.clear()
-        st.rerun()
+    st.error("Profile synchronization error. Please click the button below to retry.")
+    if st.button("🔄 Refresh Connection"): st.rerun()
     st.stop()
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
@@ -130,7 +136,7 @@ st.sidebar.write(f"Credits: **{profile['credits']}**")
 st.sidebar.write(f"Tier: **{'Active' if profile['credits'] > 0 else profile['tier']}**")
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
-if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
 # --- 8. PRICING GATE (RE-ENABLED FOR NEW USERS) ---
 if profile['credits'] == 0 and profile['tier'] == 'None':
@@ -143,6 +149,7 @@ if profile['credits'] == 0 and profile['tier'] == 'None':
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
+    
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
