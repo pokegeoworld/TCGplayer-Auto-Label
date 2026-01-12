@@ -12,17 +12,17 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (UNIFORM ALIGNMENT & MASSIVE TEXT) ---
+# --- 3. STYLING (PIXEL-PERFECT BUTTONS & MASSIVE TEXT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
     
-    /* Pricing Card Redesign - Forces level buttons */
+    /* Pricing Card Redesign */
     .pricing-card { 
         border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; 
         text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
-        min-height: 400px; display: flex; flex-direction: column; justify-content: space-between;
+        min-height: 350px; display: flex; flex-direction: column; justify-content: center;
     }
     .sub-header { 
         background: linear-gradient(90deg, #1E3A8A, #3B82F6); color: white; 
@@ -30,21 +30,26 @@ st.markdown("""
         margin: 45px auto 25px auto; font-size: 35px !important; 
     }
     
-    /* MASSIVE FONT SCALING - NO /MO ON LABELS */
+    /* FONT SCALING */
     .big-stat { font-size: 85px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 32px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
-    .small-price { font-size: 28px !important; color: #374151; font-weight: 800; margin-top: 10px; }
+    .small-price { font-size: 30px !important; color: #374151; font-weight: 800; margin-top: 10px; }
     .tier-name { font-size: 24px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; }
     
-    /* UNIFORM LEVEL BUTTONS */
-    div.stButton > button, div.stDownloadButton > button {
+    /* GLOBAL BUTTON LOCK - FORCES IDENTICAL SIZE ACROSS ALL COLS */
+    div.stButton > button, div.stLinkButton > a {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
         width: 100% !important;
         border-radius: 12px !important;
         font-weight: 800 !important;
-        height: 70px !important;
+        height: 75px !important;
         font-size: 22px !important;
         background-color: #1E3A8A !important;
         color: white !important;
+        text-decoration: none !important;
+        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -94,7 +99,7 @@ def trigger_auto_download(pdf_bytes, filename):
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTH GATE (1-CLICK REINFORCED) ---
+# --- 5. AUTHENTICATION (REINFORCED 1-CLICK SUCCESS) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -116,7 +121,7 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. APP GATE ---
+# --- 6. MAIN APP DASHBOARD ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 if not profile:
@@ -128,32 +133,34 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (FIXED TOP 2 & ALIGNMENT) ---
+# --- 7. PRICING WALL (IDENTICAL BUTTONS & NO 'ONE-TIME') ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     
+    # One-Time Section (2nd Row Buttons Lock Height)
     colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p><p class="small-price">$0 One-Time</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p><p class="small-price">$0</p></div>', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
             supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute()
             st.rerun()
     with colB:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50 One-Time</p></div>', unsafe_allow_html=True)
-        st.link_button("Buy Starter Pack", "https://buy.stripe.com/test_5kQfZjgJ67x66ot5kW5J601", use_container_width=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
+        st.link_button("Buy Starter Pack", "https://buy.stripe.com/test_5kQfZjgJ67x66ot5kW5J601")
 
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     
+    # Monthly Section
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown('<div class="pricing-card"><p class="tier-name">Basic</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
-        st.link_button("Choose Basic", "https://buy.stripe.com/test_4gM28t0K8dVueUZdRs5J602", use_container_width=True)
+        st.link_button("Choose Basic", "https://buy.stripe.com/test_4gM28t0K8dVueUZdRs5J602")
     with c2:
         st.markdown('<div class="pricing-card"><p class="tier-name">Pro</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
-        st.link_button("Choose Pro", "https://buy.stripe.com/test_bJe9AV9gE3gQeUZeVw5J603", use_container_width=True)
+        st.link_button("Choose Pro", "https://buy.stripe.com/test_bJe9AV9gE3gQeUZeVw5J603")
     with c3:
         st.markdown('<div class="pricing-card"><p class="tier-name">Unlimited</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
-        st.link_button("Choose Unlimited", "https://buy.stripe.com/test_9B600ldwU5oY5kp8x85J604", use_container_width=True)
+        st.link_button("Choose Unlimited", "https://buy.stripe.com/test_9B600ldwU5oY5kp8x85J604")
     st.stop()
 
 # --- 8. CREATOR VIEW ---
