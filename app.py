@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (PIXEL-PERFECT BUTTONS & MASSIVE TEXT) ---
+# --- 3. STYLING (FIXED BUTTON WIDTH & CENTERED LAYOUT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -23,6 +23,7 @@ st.markdown("""
         border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; 
         text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
         min-height: 350px; display: flex; flex-direction: column; justify-content: center;
+        margin-bottom: 10px;
     }
     .sub-header { 
         background: linear-gradient(90deg, #1E3A8A, #3B82F6); color: white; 
@@ -30,31 +31,38 @@ st.markdown("""
         margin: 45px auto 25px auto; font-size: 35px !important; 
     }
     
-    /* FONT SCALING */
+    /* TEXT SCALING */
+    .free-trial-title { font-size: 50px !important; font-weight: 900; color: #1E3A8A; line-height: 1.2; margin-bottom: 10px; }
     .big-stat { font-size: 85px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
     .label-text { font-size: 32px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
     .small-price { font-size: 30px !important; color: #374151; font-weight: 800; margin-top: 10px; }
     .tier-name { font-size: 24px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; }
     
-    /* GLOBAL BUTTON LOCK - FORCES IDENTICAL SIZE ACROSS ALL COLS */
+    /* UNIFORM CENTERED BUTTONS - FIXED WIDTH FOR ALL */
+    div.stButton, div.stLinkButton {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+    }
+    
     div.stButton > button, div.stLinkButton > a {
+        width: 300px !important; /* Fixed width to ensure all look the same */
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+        height: 70px !important;
+        font-size: 20px !important;
+        background-color: #1E3A8A !important;
+        color: white !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        width: 100% !important;
-        border-radius: 12px !important;
-        font-weight: 800 !important;
-        height: 75px !important;
-        font-size: 22px !important;
-        background-color: #1E3A8A !important;
-        color: white !important;
         text-decoration: none !important;
-        border: none !important;
+        margin: 0 auto !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. CORE LOGIC ---
+# --- 4. CORE FUNCTIONS ---
 def get_user_profile(user_id):
     try:
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -99,7 +107,7 @@ def trigger_auto_download(pdf_bytes, filename):
     <script>document.getElementById('autodl').click();</script>"""
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION (REINFORCED 1-CLICK SUCCESS) ---
+# --- 5. AUTHENTICATION (1-CLICK SUCCESS) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -133,14 +141,14 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (IDENTICAL BUTTONS & NO 'ONE-TIME') ---
+# --- 7. PRICING WALL (CENTERED BUTTONS & CLEAN LAYOUT) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     
-    # One-Time Section (2nd Row Buttons Lock Height)
+    # One-Time Section
     colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p><p class="small-price">$0</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="free-trial-title">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p></div>', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
             supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute()
             st.rerun()
