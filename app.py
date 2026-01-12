@@ -37,8 +37,9 @@ st.markdown("""
 # --- 4. FUNCTIONS ---
 def get_user_profile(user_id):
     try:
-        res = supabase.table("profiles").select("*").eq("id", user_id).execute()
-        return res.data[0] if res.data else None
+        # We use .single() to ensure we only get the specific logged-in user's data
+        res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
+        return res.data
     except: return None
 
 def extract_tcg_data(uploaded_file):
@@ -59,7 +60,7 @@ def create_label_pdf(items):
     can.save(); packet.seek(0)
     return packet
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION (SIDE-BY-SIDE BUTTONS) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
@@ -68,12 +69,21 @@ if "user" not in st.session_state:
         e = st.text_input("Email")
         p = st.text_input("Password", type="password")
         col1, col2 = st.columns(2)
-        if col1.form_submit_button("Log In"):
+        login_btn = col1.form_submit_button("Log In")
+        signup_btn = col2.form_submit_button("Sign Up")
+
+        if login_btn:
             try:
+                # Clear any leftover state from previous attempts before logging in
+                st.session_state.clear()
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
-                st.session_state.user = res.user; st.rerun()
-            except: st.error("Login failed.")
-        if col2.form_submit_button("Sign Up"):
+                if res.user:
+                    st.session_state.user = res.user
+                    st.rerun()
+            except: 
+                st.error("Login failed. Check your credentials.")
+        
+        if signup_btn:
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
                 st.success("Success! Please Log In.")
@@ -81,22 +91,31 @@ if "user" not in st.session_state:
     st.stop()
 
 # --- 6. MAIN DASHBOARD ---
+# Double-check the user object exists in the state
+if not st.session_state.get("user"):
+    st.session_state.clear()
+    st.rerun()
+
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
+# Profile Sync Logic (Ensures 10 credits for new accounts)
 if not profile:
     try:
-        # Re-synced to 10 credits
         supabase.table("profiles").insert({"id": user.id, "credits": 10}).execute()
         profile = get_user_profile(user.id)
     except Exception as err:
-        st.error(f"Sync Error: {err}")
+        st.error("Session sync error. Please Log Out and try again.")
         st.stop()
 
 st.sidebar.write(f"Logged in: **{user.email}**")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
 if st.sidebar.button("Log Out"):
-    st.session_state.clear(); st.rerun()
+    # Security: Wipe the session state entirely on logout
+    st.session_state.clear()
+    # Sign out from Supabase as well
+    supabase.auth.sign_out()
+    st.rerun()
 
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
@@ -108,6 +127,7 @@ if file and st.button("Generate 4x6 Labels"):
         if items:
             pdf = create_label_pdf(items)
             new_c = profile['credits'] - 1
+            # Secure update restricted to the logged-in user's ID
             supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
             st.success("Labels Generated!"); st.download_button("📥 Download", pdf, "Labels.pdf")
         else: st.error("No items found.")
