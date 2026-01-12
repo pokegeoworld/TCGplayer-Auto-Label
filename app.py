@@ -28,7 +28,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE CORRECTED PDF CREATOR (STRICT LAYOUT) ---
+# --- 4. THE CORRECTED PDF CREATOR ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
@@ -82,28 +82,24 @@ def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
     
-    # Cleaning "Page 1 of X" or metadata noise from order number
     order_no = "Unknown"
     order_match = re.search(r"Order Number:\s*([A-Z0-9\-]+)", text)
     if order_match: order_no = order_match.group(1).strip()
 
-    # Improved extraction for Header Data
     lines = [l.strip() for l in text.split('\n') if l.strip()]
     data = {
         'buyer_name': lines[0] if len(lines) > 0 else "N/A",
         'address': lines[1] if len(lines) > 1 else "N/A",
         'city_state_zip': lines[2] if len(lines) > 2 else "N/A",
-        [cite_start]'date': "01/12/2026", # Fallback based on provided sample [cite: 14]
+        'date': "01/12/2026", 
         'method': "Standard", 
         'seller': "ThePokeGeo",
         'order_no': order_no
     }
     
-    # Re-extracting specific values if regex finds them
     date_match = re.search(r"Order Date:\s*([\d/]+)", text)
     if date_match: data['date'] = date_match.group(1)
     
-    # Extract Items from Table
     items = []
     item_pattern = r'"(\d+)"\s*,\s*"([\s\S]*?)"\s*,\s*"\s*\\\$([\d\.]+)"\s*,\s*"\s*\\\$([\d\.]+)"'
     matches = re.findall(item_pattern, text)
