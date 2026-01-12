@@ -67,4 +67,4 @@ if profile:
     can_print = False
     if tier == "unlimited":
         st.sidebar.markdown("**Plan:** UNLIMITED")
-        st.sidebar.success("Unlimited Access
+        st.sidebar.success("Unlimited Access)
