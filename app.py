@@ -84,25 +84,26 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (FIXED REFRESH & DOUBLE LOGIN) ---
+# --- 5. PERSISTENT AUTHENTICATION (FIXES REFRESH & SINGLE-CLICK LOGIN) ---
 if "user" not in st.session_state:
-    # Check for existing background session
-    curr_session = supabase.auth.get_session()
-    if curr_session and curr_session.user:
-        st.session_state.user = curr_session.user
+    # 5a. Try to recover existing session from the database connection
+    res = supabase.auth.get_user()
+    if res.user:
+        st.session_state.user = res.user
         st.rerun()
 
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    u_email, u_pass = st.sidebar.text_input("Email"), st.sidebar.text_input("Password", type="password")
+    u_email = st.sidebar.text_input("Email")
+    u_pass = st.sidebar.text_input("Password", type="password")
     l_col, r_col = st.sidebar.columns(2)
     
     if l_col.button("Log In"):
         try:
-            res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if res.user:
-                st.session_state.user = res.user
-                st.rerun()
+            auth_res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
+            if auth_res.user:
+                st.session_state.user = auth_res.user
+                st.rerun() # Immediate rerun ensures one-click success
         except: st.sidebar.error("Login Failed.")
     if r_col.button("Sign Up"):
         try:
@@ -111,7 +112,7 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (FIXED DOUBLE LOGIN GLITCH) ---
+# --- 6. DATABASE HANDSHAKE (ZERO-GLITCH PROFILE SYNC) ---
 user = st.session_state.user
 
 # Handle Stripe Success Redirect
@@ -121,19 +122,17 @@ if st.query_params.get("payment") == "success":
     time.sleep(1.5)
     st.query_params.clear()
 
-# Wait loop to ensure profile exists before loading (Kills glitch)
+# Improved handshake with aggressive retry logic
 profile = None
-retries = 0
-while not profile and retries < 6:
+for _ in range(10): # Try for 5 seconds total
     profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
     if profile_res.data:
         profile = profile_res.data[0]
         break
     time.sleep(0.5)
-    retries += 1
 
 if not profile:
-    # Nuclear fallback to ensure app never hangs
+    # Final fallback if SQL trigger is non-responsive
     supabase.table("profiles").upsert({"id": user.id, "credits": 0, "tier": "None"}).execute()
     profile = {"id": user.id, "credits": 0, "tier": "None"}
 
@@ -145,11 +144,10 @@ st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("🚪 Log Out"):
     st.session_state.clear()
-    supabase.auth.clear_session()
     supabase.auth.sign_out()
     st.rerun()
 
-# --- 8. RESTORED PRICING GATE ---
+# --- 8. PRICING GATE ---
 if profile['credits'] == 0 and profile['tier'] == "None":
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
