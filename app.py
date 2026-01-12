@@ -7,7 +7,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 
 # --- 1. PAGE CONFIGURATION ---
-st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="centered")
+st.set_page_config(page_title="TCGplay Auto Label Creator", page_icon="🎴", layout="centered")
 
 # --- 2. DATABASE CONNECTION ---
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
@@ -32,7 +32,6 @@ st.markdown("""
         text-align: center;
         padding-bottom: 30px;
     }
-    /* Hides the "Press Enter to submit form" text */
     div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -42,8 +41,7 @@ def get_user_profile(user_id):
     try:
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
         return res.data
-    except:
-        return None
+    except: return None
 
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
@@ -71,85 +69,66 @@ def create_label_pdf(items):
 
 # --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
-    st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-title">TCGplay Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
-    
     with st.sidebar.form("auth_form"):
         st.subheader("Account Access")
-        e = st.text_input("Email")
-        p = st.text_input("Password", type="password")
+        e, p = st.text_input("Email"), st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
-        login_btn = c1.form_submit_button("Log In")
-        signup_btn = c2.form_submit_button("Sign Up")
+        login_btn, signup_btn = c1.form_submit_button("Log In"), c2.form_submit_button("Sign Up")
 
     if login_btn:
         try:
             res = supabase.auth.sign_in_with_password({"email": e, "password": p})
             st.session_state.user = res.user
             st.rerun()
-        except Exception as err:
-            st.sidebar.error(f"Login Error: {str(err)}")
-            
+        except Exception as err: st.sidebar.error(f"Login Error: {str(err)}")
     if signup_btn:
         try:
-            # Step 1: Create the Auth User
             res = supabase.auth.sign_up({"email": e, "password": p})
             if res.user:
-                # Step 2: Attempt to create the profile row directly from the app
-                # This acts as a backup in case the Trigger fails
-                try:
-                    supabase.table("profiles").insert({"id": res.user.id, "credits": 5, "tier": "free"}).execute()
-                except:
-                    pass # Row might already exist due to trigger
                 st.sidebar.success("Signup successful! Please log in.")
-        except Exception as err:
-            st.sidebar.error(f"Signup Error: {str(err)}")
-    
-    st.info("👈 Please use the sidebar to access your account.")
+        except Exception as err: st.sidebar.error(f"Signup Error: {str(err)}")
     st.stop()
 
 # --- 6. MAIN INTERFACE ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# Force profile creation for existing users who hit the "Profile not found" error
+# Silent Sync for profiles
 if not profile:
     try:
         supabase.table("profiles").upsert({"id": user.id, "credits": 5, "tier": "free"}).execute()
         profile = get_user_profile(user.id)
-    except Exception:
-        st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
-        st.error("Profile sync error. Please check your Supabase RLS policies.")
+    except:
+        st.markdown('<p class="hero-title">TCGplay Auto Label Creator</p>', unsafe_allow_html=True)
+        st.error("Profile sync pending. Refresh in a moment.")
         if st.sidebar.button("Log Out"):
             st.session_state.clear()
             st.rerun()
         st.stop()
 
 st.sidebar.title("Dashboard")
-st.sidebar.write(f"**Email:** {user.email}")
 st.sidebar.write(f"**Credits:** {profile.get('credits', 0)}")
 if st.sidebar.button("Log Out"):
     st.session_state.clear()
     st.rerun()
 
-st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
+st.markdown('<p class="hero-title">TCGplay Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload TCGplayer Packing Slip PDF", type="pdf")
+file = st.file_uploader("Upload Packing Slip PDF", type="pdf")
 
-if uploaded_file and st.button("Generate 4x6 Labels"):
+if file and st.button("Generate 4x6 Labels"):
     if profile.get('credits', 0) > 0:
-        items = extract_tcg_data(uploaded_file)
+        items = extract_tcg_data(file)
         if items:
-            pdf_bytes = create_label_pdf(items)
+            pdf = create_label_pdf(items)
             try:
-                new_count = profile.get('credits', 0) - 1
-                supabase.table("profiles").update({"credits": new_count}).eq("id", user.id).execute()
-                st.success(f"Successfully processed {len(items)} items.")
-                st.download_button("📥 Download PDF", pdf_bytes, "TCG_Labels.pdf", "application/pdf")
-            except Exception:
-                st.error("Failed to update credits. Please try again.")
-        else:
-            st.error("No items found in PDF.")
-    else:
-        st.error("No credits remaining.")
+                new_c = profile.get('credits', 0) - 1
+                supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
+                st.success(f"Processed {len(items)} items.")
+                st.download_button("📥 Download PDF", pdf, "TCG_Labels.pdf", "application/pdf")
+            except: st.error("Credit update failed.")
+        else: st.error("No items found.")
+    else: st.error("No credits remaining.")
