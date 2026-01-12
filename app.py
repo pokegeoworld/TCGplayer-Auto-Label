@@ -28,19 +28,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE PERFECTED PDF CREATOR ---
+# --- 4. THE PERFECTED PDF CREATOR (EXACT ORDER REQUESTED) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
     
-    # Customer Info (Requested 18pt Font)
+    # 1. Customer Name & Address (18pt Font)
     can.setFont("Helvetica-Bold", 18)
     y = 5.7*inch
     can.drawString(0.25*inch, y, data['name']); y -= 0.3*inch
     can.drawString(0.25*inch, y, data['address']); y -= 0.3*inch
     can.drawString(0.25*inch, y, data['city_state_zip']); y -= 0.4*inch
     
-    # Metadata Sequence
+    # 2. Sequence: Date, Method, Buyer, Seller, Order Number
     can.setFont("Helvetica", 10)
     can.drawString(0.25*inch, y, f"Order Date: {data['date']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Shipping Method: {data['method']}"); y -= 0.15*inch
@@ -48,14 +48,15 @@ def create_label_pdf(data, items):
     can.drawString(0.25*inch, y, f"Seller Name: {data['seller']}"); y -= 0.15*inch
     can.drawString(0.25*inch, y, f"Order Number: {data['order_no']}"); y -= 0.2*inch
     
-    # Separator
+    # Separator Line
     can.setLineWidth(1.5); can.line(0.25*inch, y, 3.75*inch, y); y -= 0.25*inch
     
-    # Packing List Table
+    # 3. Packing List Table Header
     can.setFont("Helvetica-Bold", 10)
     can.drawString(0.25*inch, y, "QTY"); can.drawString(0.75*inch, y, "Description"); can.drawString(3.0*inch, y, "Price"); can.drawString(3.5*inch, y, "Total")
     y -= 0.2*inch
     
+    # 4. Items List with Wrap
     can.setFont("Helvetica", 9)
     for item in items:
         if y < 0.5*inch: can.showPage(); y = 5.7*inch; can.setFont("Helvetica", 9)
@@ -92,7 +93,7 @@ def extract_tcg_data(uploaded_file):
         return data, items
     except: return None, None
 
-# --- 6. "LOOSE" AUTHENTICATION (GLITCH-FREE REVERT) ---
+# --- 6. STABLE "LOOSE" AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -101,23 +102,22 @@ if "user" not in st.session_state:
     l_col, r_col = st.sidebar.columns(2)
     if l_col.button("Log In"):
         res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-        if res.user:
+        if res.user: 
             st.session_state.user = res.user
-            st.rerun() 
+            st.rerun() # Forces the app to recognize the session immediately
     if r_col.button("Sign Up"):
         supabase.auth.sign_up({"email": u_email, "password": u_pass})
         st.sidebar.success("Account Created! Click Log In.")
     st.stop()
 
-# --- 7. MAIN APP LOGIC ---
+# --- 7. MAIN APP DASHBOARD ---
 user = st.session_state.user
 profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
 if not profile:
     supabase.table("profiles").insert({"id": user.id, "credits": 5, "tier": "New"}).execute()
     profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
 
-if st.sidebar.button("Log Out"):
-    st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
 # --- 8. PRICING VIEW ---
 if profile.get('tier') == 'New':
