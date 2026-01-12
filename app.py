@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (68PX TITLE & 450PX SIDEBAR) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
@@ -43,16 +43,19 @@ def get_user_profile(user_id):
 
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
-    text = "".join([p.extract_text() + "\n" for p in reader.pages])
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() + "\n"
     
-    # IMPROVED REGEX: Captures "Qty Name [SetName]" even with extra spaces or tabs
-    items = re.findall(r"(\d+)\s+([\w\s\'\-\,\!\.\?\(\)]+)\s+\[(.*?)\]", text)
-    
-    # Extract Order Number
-    order_match = re.search(r"Order\s*#:\s*(\d+)", text, re.IGNORECASE)
+    # Extract Order Number (Finds 'Order #:' or 'Order No' or just 'Order #')
+    order_match = re.search(r"Order\s*#?\s*:?\s*(\d{8,})", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
+
+    # STRONGER EXTRACTION: Matches Number + Name + [Set] across lines
+    # This pattern is much more flexible for different TCGplayer packing slip layouts
+    items = re.findall(r"(\d+)\s+([\w\s\'\-\,\!\.\?\(\)]+?)\s*\[(.*?)\]", text, re.DOTALL)
     
-    return items, order_no, text
+    return items, order_no
 
 def create_label_pdf(items):
     packet = io.BytesIO()
@@ -63,10 +66,11 @@ def create_label_pdf(items):
     for qty, name, set_name in items:
         if y < 0.8*inch:
             can.showPage(); y = 5.75*inch; can.setFont("Helvetica", 11)
-        # Clean up whitespace from name
-        clean_name = name.strip()
+        # Remove extra newlines or tabs from names
+        clean_name = " ".join(name.split())
         can.drawString(x, y, f"[{qty}x] {clean_name} - {set_name}"); y -= lh
     
+    # Return Address
     can.setFont("Helvetica-Oblique", 8); can.setStrokeColorRGB(0.8, 0.8, 0.8)
     can.line(0.25*inch, 0.5*inch, 3.75*inch, 0.5*inch)
     can.drawString(0.25*inch, 0.35*inch, "Return: 36 Michael Anthony ln, Depew NY 14043")
@@ -132,21 +136,19 @@ uploaded_file = st.file_uploader("Upload TCGplayer PDF to Auto-Download Label", 
 
 if uploaded_file:
     if profile['credits'] > 0:
-        items, order_no, raw_text = extract_tcg_data(uploaded_file)
+        items, order_no = extract_tcg_data(uploaded_file)
         if items:
             pdf_result = create_label_pdf(items)
             filename = f"TCGplayer_{order_no}.pdf"
             
-            # Update Credits
+            # Deduct Credit
             new_c = profile['credits'] - 1
             supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
             
-            # Execute Download
+            # Auto Download
             auto_download(pdf_result, filename)
             st.success(f"Downloading {filename}...")
         else:
-            st.error("No item data found in PDF. The layout might be different.")
-            with st.expander("Debug: See Raw PDF Text"):
-                st.code(raw_text)
+            st.error("Could not find order items in this PDF. Please ensure it is a TCGplayer Packing Slip.")
     else:
         st.error("Out of credits.")
