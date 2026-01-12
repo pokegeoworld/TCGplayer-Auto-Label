@@ -46,26 +46,38 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (STRICT 18PT BOLD) ---
+# --- 4. THE DYNAMIC PDF CREATOR (ENLARGED TOP-ALIGNED ADDRESS) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
-    c.drawString(0.5 * inch, height - 1.30 * inch, data['address'])
-    c.drawString(0.5 * inch, height - 1.60 * inch, data['city_state_zip'])
-    c.setLineWidth(2); c.line(0.5 * inch, height - 1.9 * inch, 7.5 * inch, height - 1.9 * inch)
-    c.setFont("Helvetica", 11); y_pos = height - 2.2 * inch
+    
+    # ENLARGED ADDRESS (22PT BOLD) ALIGNED TO TOP (0.5" from edge)
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(0.5 * inch, height - 0.5 * inch, data['buyer_name'])
+    c.drawString(0.5 * inch, height - 0.85 * inch, data['address'])
+    c.drawString(0.5 * inch, height - 1.20 * inch, data['city_state_zip'])
+    
+    c.setLineWidth(2)
+    c.line(0.5 * inch, height - 1.5 * inch, 7.5 * inch, height - 1.5 * inch)
+
+    # Order Summary (11PT)
+    c.setFont("Helvetica", 11)
+    y_pos = height - 1.8 * inch
     c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
     c.drawString(0.5 * inch, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
     c.drawString(0.5 * inch, y_pos - 0.44*inch, f"Buyer Name: {data['buyer_name']}")
     c.drawString(0.5 * inch, y_pos - 0.66*inch, "Seller Name: ThePokeGeo")
     c.drawString(0.5 * inch, y_pos - 0.88*inch, f"Order Number: {data['order_no']}")
-    y_pos -= 1.3 * inch; c.setFont("Helvetica-Bold", 12)
+    
+    # Items Table Header
+    y_pos -= 1.3 * inch
+    c.setFont("Helvetica-Bold", 12)
     c.drawString(0.5 * inch, y_pos, "Qty"); c.drawString(1.0 * inch, y_pos, "Description")
     c.drawString(6.6 * inch, y_pos, "Price"); c.drawString(7.2 * inch, y_pos, "Total")
+    
     y_pos -= 0.1 * inch; c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos); y_pos -= 0.25 * inch
+    
     font_name, font_size = "Helvetica", 9.5; c.setFont(font_name, font_size)
     total_qty, grand_total = 0, 0.0
     for item in items:
@@ -78,13 +90,14 @@ def create_label_pdf(data, items):
         for line in wrapped_lines:
             c.drawString(1.0 * inch, y_pos, line); y_pos -= 0.18 * inch
         total_qty += int(item['qty']); grand_total += float(item['total'].replace('$', '').replace(',', '')); y_pos -= 0.07 * inch
+    
     y_pos -= 0.3 * inch; c.line(0.5 * inch, y_pos + 0.15 * inch, 7.8 * inch, y_pos + 0.15 * inch)
     c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (FIXED LOGIN GLITCH) ---
+# --- 5. AUTHENTICATION (SEQUENTIAL) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -93,14 +106,10 @@ if "user" not in st.session_state:
     if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if res.user:
-                st.session_state.user = res.user
-                st.rerun() 
+            if res.user: st.session_state.user = res.user; st.rerun() 
         except: st.sidebar.error("Login Failed.")
     if r_col.button("Sign Up"):
-        try:
-            supabase.auth.sign_up({"email": u_email, "password": u_pass})
-            st.sidebar.success("Account Created! Click Log In.")
+        try: supabase.auth.sign_up({"email": u_email, "password": u_pass}); st.sidebar.success("Created! Log In.")
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
@@ -108,7 +117,6 @@ if "user" not in st.session_state:
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
-
 if not profile:
     supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
     profile = {"id": user.id, "credits": 0, "tier": "None"}
@@ -119,12 +127,9 @@ st.sidebar.write(f"Credits: **{profile['credits']}**")
 st.sidebar.write(f"Tier: **{'Active' if profile['credits'] > 0 else profile['tier']}**")
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
-if st.sidebar.button("🚪 Log Out"):
-    st.session_state.clear()
-    supabase.auth.sign_out()
-    st.rerun()
+if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 8. RESTORED PRICING GATE (ALL TIERS) ---
+# --- 8. PRICING GATE (ALL TIERS) ---
 if profile['credits'] == 0 and profile['tier'] == "None":
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
@@ -135,7 +140,6 @@ if profile['credits'] == 0 and profile['tier'] == "None":
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
-    
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -154,30 +158,15 @@ if uploaded_file:
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
     lines = [l.strip() for l in text.split('\n') if l.strip()]
-    
     try:
         order_no = re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
         order_date = re.search(r"(\d{2}/\d{2}/\d{4})", text).group(1)
         ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line or "Shipping Address:" in line)
-        
-        data = {
-            'buyer_name': lines[ship_idx + 1],
-            'address': lines[ship_idx + 2],
-            'city_state_zip': lines[ship_idx + 3],
-            'date': order_date, 'order_no': order_no,
-            'method': "Standard (7-10 days)", 'seller': "ThePokeGeo"
-        }
-
+        data = {'buyer_name': lines[ship_idx + 1], 'address': lines[ship_idx + 2], 'city_state_zip': lines[ship_idx + 3], 'date': order_date, 'order_no': order_no, 'method': "Standard (7-10 days)", 'seller': "ThePokeGeo"}
         items = []
         item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, re.DOTALL)
         for qty, desc, price, total in item_rows:
             items.append({'qty': qty, 'desc': desc.replace('\n', ' ').strip(), 'price': f"${price}", 'total': f"${total}"})
-
         pdf_bytes = create_label_pdf(data, items)
-        st.download_button(
-            label=f"📥 DOWNLOAD LABEL: {order_no}",
-            data=pdf_bytes, file_name=f"TCGplayer_{order_no}.pdf", mime="application/pdf", use_container_width=True,
-            on_click=lambda: (supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute())
-        )
-    except:
-        st.error("Error reading file. Ensure it is a valid TCGplayer packing slip.")
+        st.download_button(label=f"📥 DOWNLOAD LABEL: {order_no}", data=pdf_bytes, file_name=f"TCGplayer_{order_no}.pdf", mime="application/pdf", use_container_width=True, on_click=lambda: (supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()))
+    except: st.error("Error reading file. Ensure it is a valid TCGplayer packing slip.")
