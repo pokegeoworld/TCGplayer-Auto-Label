@@ -3,9 +3,9 @@ from supabase import create_client
 import io, re, base64
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import Table, TableStyle, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.utils import simpleSplit
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="centered")
@@ -14,22 +14,22 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (RESTORED STABLE LAYOUT) ---
+# --- 3. STYLING (RESTORED STABLE SIDE-BY-SIDE) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
     .hero-title { color: #1E3A8A; font-size: 68px !important; font-weight: 800; text-align: center; margin-top: -40px; line-height: 1.1; }
-    .pricing-card { border: 2px solid #e1e4e8; padding: 20px; border-radius: 15px; text-align: center; background: white; min-height: 350px; display: flex; flex-direction: column; justify-content: center; }
+    .pricing-card { border: 2px solid #e1e4e8; padding: 30px 15px; border-radius: 15px; text-align: center; background: white; box-shadow: 0 4px 10px rgba(0,0,0,0.05); min-height: 350px; display: flex; flex-direction: column; justify-content: center; }
     .sub-header { background: #3B82F6; color: white; padding: 20px; border-radius: 12px; text-align: center; font-weight: 900; margin: 30px auto 20px auto; font-size: 32px !important; text-transform: uppercase; }
     
     .stDownloadButton > button {
         background-color: #15803d !important;
         color: white !important;
-        font-size: 22px !important;
-        height: 70px !important;
-        font-weight: 700 !important;
+        font-size: 24px !important;
+        height: 80px !important;
+        font-weight: 800 !important;
         border-radius: 12px !important;
-        margin-top: 20px !important;
+        border: 2px solid #14532d !important;
     }
     
     div.stButton > button, div.stLinkButton > a { 
@@ -41,88 +41,108 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE PDF CREATOR (14PT FONT & ITEM LISTING) ---
+# --- 4. THE MASTER PDF CREATOR (STABLE LAYOUT) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
-    can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
+    c = canvas.Canvas(packet, pagesize=letter)
+    width, height = letter
     
-    # Address Section (14pt Bold)
-    can.setFont("Helvetica-Bold", 14)
-    y = 5.7 * inch
-    can.drawString(0.25*inch, y, data.get('buyer_name', 'N/A')); y -= 0.22*inch
-    can.drawString(0.25*inch, y, data.get('address', 'N/A')); y -= 0.22*inch
-    can.drawString(0.25*inch, y, data.get('city_state_zip', 'N/A')); y -= 0.3*inch
+    # Standardized Address (18PT BOLD)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
+    c.drawString(0.5 * inch, height - 1.30 * inch, data['address'])
+    c.drawString(0.5 * inch, y := height - 1.60 * inch, data['city_state_zip'])
     
-    can.setDash(3, 3); can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch; can.setDash()
-    
-    # Metadata Section (10pt)
-    can.setFont("Helvetica", 10)
-    can.drawString(0.25*inch, y, f"Order Date: {data.get('date', 'N/A')}"); y -= 0.15*inch
-    can.drawString(0.25*inch, y, f"Shipping Method: {data.get('method', 'Standard')}"); y -= 0.15*inch
-    can.drawString(0.25*inch, y, f"Buyer Name: {data.get('buyer_name', 'N/A')}"); y -= 0.15*inch
-    can.drawString(0.25*inch, y, f"Seller Name: {data.get('seller', 'ThePokeGeo')}"); y -= 0.15*inch
-    can.drawString(0.25*inch, y, f"Order Number: {data.get('order_no', 'N/A')}"); y -= 0.2*inch
-    
-    can.setDash(3, 3); can.line(0.25*inch, y, 3.75*inch, y); y -= 0.2*inch; can.setDash()
-    
-    # Packing Table
-    styles = getSampleStyleSheet(); styleN = styles["BodyText"]
-    styleN.fontSize = 8; styleN.leading = 9
+    c.setLineWidth(2)
+    c.line(0.5 * inch, height - 1.9 * inch, 7.5 * inch, height - 1.9 * inch)
 
-    table_data = [["QTY", "Description", "Price", "Total"]]
+    # Order Summary (11PT)
+    c.setFont("Helvetica", 11)
+    y_pos = height - 2.2 * inch
+    c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
+    c.drawString(0.5 * inch, y_pos - 0.22*inch, f"Shipping Method: {data['method']}")
+    c.drawString(0.5 * inch, y_pos - 0.44*inch, f"Buyer Name: {data['buyer_name']}")
+    c.drawString(0.5 * inch, y_pos - 0.66*inch, f"Seller Name: {data['seller']}")
+    c.drawString(0.5 * inch, y_pos - 0.88*inch, f"Order Number: {data['order_no']}")
+    
+    # Items Table Headers
+    y_pos -= 1.3 * inch
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(0.5 * inch, y_pos, "Qty")
+    c.drawString(1.0 * inch, y_pos, "Description")
+    c.drawString(6.6 * inch, y_pos, "Price") 
+    c.drawString(7.2 * inch, y_pos, "Total")
+    
+    y_pos -= 0.1 * inch
+    c.setLineWidth(1)
+    c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos)
+    y_pos -= 0.25 * inch
+    
+    # Item Listing with Wrapping
+    font_name, font_size = "Helvetica", 9.5
+    c.setFont(font_name, font_size)
+    total_qty, grand_total = 0, 0.0
+
     for item in items:
-        p_desc = Paragraph(item['desc'], styleN)
-        table_data.append([item['qty'], p_desc, item['price'], item['total']])
-    
-    table = Table(table_data, colWidths=[0.35*inch, 2.2*inch, 0.45*inch, 0.5*inch])
-    table.setStyle(TableStyle([
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('FONTSIZE', (0,0), (-1,-1), 8),
-    ]))
-    
-    w, h = table.wrapOn(can, 3.5*inch, y)
-    table.drawOn(can, 0.25*inch, y - h)
-    can.save(); packet.seek(0)
+        wrapped_lines = simpleSplit(item['desc'], font_name, font_size, 5.3 * inch)
+        needed_space = len(wrapped_lines) * 0.18 * inch
+        
+        if y_pos - needed_space < 1.0 * inch:
+            c.showPage(); y_pos = height - 0.5 * inch; c.setFont(font_name, font_size)
+
+        c.drawString(0.5 * inch, y_pos, item['qty'])
+        c.drawString(6.6 * inch, y_pos, item['price'])
+        c.drawString(7.2 * inch, y_pos, item['total'])
+        
+        for line in wrapped_lines:
+            c.drawString(1.0 * inch, y_pos, line)
+            y_pos -= 0.18 * inch
+        
+        total_qty += int(item['qty'])
+        grand_total += float(item['total'].replace('$', ''))
+        y_pos -= 0.07 * inch
+
+    # Totals Section
+    y_pos -= 0.3 * inch
+    c.line(0.5 * inch, y_pos + 0.15 * inch, 7.8 * inch, y_pos + 0.15 * inch)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
+    c.drawString(5.8 * inch, y_pos, "Grand Total:") 
+    c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
+
+    c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. DATA EXTRACTION (HEAVY-DUTY SCAN FOR Jesus/Xoua) ---
+# --- 5. DATA EXTRACTION (HEAVY-DUTY SCAN) ---
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
     lines = [l.strip() for l in text.split('\n') if l.strip()]
-    
     try:
-        # Find 'Ship To:' line and get next 3 lines for address [cite: 2, 7, 8, 9]
-        ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line or "Shipping Address:" in line)
+        ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line)
         data = {
             'buyer_name': lines[ship_idx + 1],
             'address': lines[ship_idx + 2],
             'city_state_zip': lines[ship_idx + 3],
+            'date': re.search(r"Order Date:.*?\"([\d/]+)\"", text, re.DOTALL).group(1),
             'order_no': re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1),
-            'date': re.search(r"Order Date:\s*,\s*\"([\d/]+)\"", text).group(1),
             'method': "Standard (7-10 days)",
             'seller': "ThePokeGeo"
         }
-        
         items = []
-        # Captured from Jesus Romero quoted CSV format [cite: 17]
+        # Captured from Jesus Romero quoted CSV format 
         item_matches = re.findall(r'\"(\d+)\"\s*,\s*\"([\s\S]*?)\"\s*,\s*\"\\?\$([\d\.]+)\"\s*,\s*\"\\?\$([\d\.]+)\"', text)
         for m in item_matches:
             if "Total" in m[1]: continue 
             items.append({'qty': m[0], 'desc': m[1].replace('\n', ' ').strip(), 'price': f"${m[2]}", 'total': f"${m[3]}"})
-        
         return data, items
-    except:
-        # Fallback to Manual Error PDF if parsing fails [cite: 28-33]
-        return {'buyer_name': 'Error Reading PDF', 'address': 'Manual Check Required', 'city_state_zip': '', 'date': 'N/A', 'method': 'N/A', 'seller': 'ThePokeGeo', 'order_no': 'Error'}, []
+    except: return None, None
 
 # --- 6. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    u_email = st.sidebar.text_input("Email"); u_pass = st.sidebar.text_input("Password", type="password")
+    u_email, u_pass = st.sidebar.text_input("Email"), st.sidebar.text_input("Password", type="password")
     l_col, r_col = st.sidebar.columns(2)
     if l_col.button("Log In"):
         try:
@@ -134,7 +154,7 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 7. MAIN APP DASHBOARD ---
+# --- 7. DATABASE HANDSHAKE ---
 user = st.session_state.user
 profile = supabase.table("profiles").select("*").eq("id", user.id).single().execute().data
 if not profile:
@@ -143,7 +163,7 @@ if not profile:
 
 st.sidebar.write(f"Credits: **{'∞' if profile['tier'] == 'Unlimited' else profile['credits']}**")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
-if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
 # --- 8. PRICING VIEW ---
 if profile.get('tier') == 'New':
@@ -153,8 +173,8 @@ if profile.get('tier') == 'New':
         st.markdown('<div class="pricing-card"><h3>Free Trial</h3><p>5 Labels</p></div>', unsafe_allow_html=True)
         if st.button("Activate"): supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
     with c2:
-        st.markdown('<div class="pricing-card"><h3>Starter</h3><p>10 Labels</p><p>$0.50</p></div>', unsafe_allow_html=True)
-        st.link_button("Buy Starter", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
+        st.markdown('<div class="pricing-card"><h3>Starter</h3><p>10 Labels</p></div>', unsafe_allow_html=True)
+        st.link_button("Buy $0.50", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
     st.stop()
 
 # --- 9. CREATOR VIEW ---
@@ -163,13 +183,10 @@ uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
 
 if uploaded_file:
     h_data, i_list = extract_tcg_data(uploaded_file)
-    if profile['tier'] == 'Unlimited' or profile['credits'] > 0:
-        final_pdf_bytes = create_label_pdf(h_data, i_list)
+    if h_data:
+        pdf_bytes = create_label_pdf(h_data, i_list)
         st.download_button(
             label=f"📥 DOWNLOAD LABEL PDF: {h_data['order_no']}",
-            data=final_pdf_bytes,
-            file_name=f"TCGplayer_{h_data['order_no']}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
+            data=pdf_bytes, file_name=f"TCGplayer_{h_data['order_no']}.pdf", mime="application/pdf", use_container_width=True,
             on_click=lambda: (supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute() if profile['tier'] != 'Unlimited' else None)
         )
