@@ -6,9 +6,16 @@ from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 
-# --- 1. PAGE CONFIGURATION & STYLING ---
+# --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="centered")
 
+# --- 2. DATABASE CONNECTION ---
+# Ensure these exist in your Secrets
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase = create_client(url, key)
+
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -16,12 +23,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. DATABASE CONNECTION ---
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-supabase = create_client(url, key)
-
-# --- 3. HELPER FUNCTIONS ---
+# --- 4. HELPER FUNCTIONS ---
 def get_user_profile(user_id):
     try:
         response = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -45,3 +47,96 @@ def create_label_pdf(items):
     can.drawString(x_offset, y_offset, "TCGplayer Label")
     y_offset -= 0.4*inch
     can.setFont("Helvetica", 10)
+    for qty, name, set_name in items:
+        if y_offset < 0.5*inch:
+            can.showPage()
+            y_offset = 5.75*inch
+            can.setFont("Helvetica", 10)
+        can.drawString(x_offset, y_offset, f"[{qty}x] {name} - {set_name}")
+        y_offset -= line_height
+    can.save()
+    packet.seek(0)
+    return packet
+
+# --- 5. AUTHENTICATION ---
+if "user" not in st.session_state:
+    st.sidebar.title("Login / Signup")
+    
+    with st.sidebar.form("auth_form"):
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        
+        # Using sidebar-specific columns to prevent layout crashes
+        col1, col2 = st.columns(2)
+        login_submitted = col1.form_submit_button("Log In")
+        signup_submitted = col2.form_submit_button("Sign Up")
+
+    if login_submitted:
+        try:
+            res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            st.session_state.user = res.user
+            st.rerun()
+        except Exception:
+            st.sidebar.error("Invalid email or password.")
+            
+    if signup_submitted:
+        try:
+            res = supabase.auth.sign_up({"email": email, "password": password})
+            if res.user:
+                supabase.table("profiles").upsert({"id": res.user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
+                st.sidebar.success("Account created! Please Log In.")
+        except Exception as e:
+            st.sidebar.error(f"Signup failed: {str(e)}")
+    
+    st.markdown('<p class="title-text">TCGplayer 4x6 Labeler</p>', unsafe_allow_html=True)
+    st.info("Please log in via the sidebar to access the label generator.")
+    st.stop()
+
+# --- 6. MAIN INTERFACE (Logged In) ---
+user = st.session_state.user
+profile = get_user_profile(user.id)
+
+# Profile creation fallback
+if user and not profile:
+    try:
+        supabase.table("profiles").upsert({"id": user.id, "tier": "free", "credits": 5, "used_this_month": 0}).execute()
+        profile = get_user_profile(user.id)
+    except:
+        st.error("Database Error. Check Supabase RLS policies.")
+        st.stop()
+
+if profile:
+    tier = profile.get("tier", "free")
+    credits = profile.get("credits", 0)
+    used = profile.get("used_this_month", 0)
+    
+    st.sidebar.title("Your Account")
+    st.sidebar.write(f"Logged in: **{user.email}**")
+    st.sidebar.write(f"Credits: **{credits}**")
+    
+    if st.sidebar.button("Log Out"):
+        st.session_state.clear()
+        st.rerun()
+
+    st.markdown('<p class="title-text">TCGplayer 4x6 Label Creator</p>', unsafe_allow_html=True)
+    
+    uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
+    
+    if uploaded_file:
+        if st.button("Generate 4x6 Labels"):
+            if tier == "unlimited" or credits > 0:
+                data = extract_tcg_data(uploaded_file)
+                if data:
+                    pdf_output = create_label_pdf(data)
+                    # Update database
+                    supabase.table("profiles").update({
+                        "used_this_month": used + 1,
+                        "credits": credits if tier == "unlimited" else credits - 1
+                    }).eq("id", user.id).execute()
+                    
+                    st.success(f"Parsed {len(data)} items.")
+                    st.download_button("📥 Download 4x6 PDF", pdf_output, "TCG_4x6.pdf", "application/pdf")
+                else:
+                    st.error("No items found. Check PDF format.")
+            else:
+                st.error("No credits remaining.")
