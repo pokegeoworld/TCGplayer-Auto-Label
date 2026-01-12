@@ -19,7 +19,6 @@ st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
     .title-text { color: #1E3A8A; font-size: 32px; font-weight: bold; text-align: center; padding-bottom: 20px; }
-    /* Hides "Press Enter to Submit" */
     div[data-testid="stForm"] small { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -79,10 +78,9 @@ if "user" not in st.session_state:
             
     if signup_submitted:
         try:
+            # Profile is now handled by the SQL Trigger automatically
             res = supabase.auth.sign_up({"email": email, "password": password})
             if res.user:
-                # Initial Profile Create
-                supabase.table("profiles").upsert({"id": res.user.id, "tier": "free", "credits": 5}).execute()
                 st.sidebar.success("Account created! Please Log In.")
         except Exception as e:
             st.sidebar.error(f"Signup error: {str(e)}")
@@ -95,13 +93,13 @@ if "user" not in st.session_state:
 user = st.session_state.user
 profile = get_user_profile(user.id)
 
-# Fallback profile creation
-if user and not profile:
+if not profile:
+    # If a profile still doesn't exist (for old users), try to create it once.
     try:
         supabase.table("profiles").upsert({"id": user.id, "tier": "free", "credits": 5}).execute()
         profile = get_user_profile(user.id)
     except Exception as e:
-        st.error(f"Database Error: {str(e)}")
+        st.error(f"Database Permission Error: {str(e)}")
         st.stop()
 
 if profile:
@@ -121,10 +119,8 @@ if profile:
             if data:
                 pdf_output = create_label_pdf(data)
                 try:
-                    # Update credits
                     new_credits = profile.get('credits', 0) if profile.get('tier') == "unlimited" else profile.get('credits', 0) - 1
                     supabase.table("profiles").update({"credits": new_credits, "used_this_month": profile.get('used_this_month', 0) + 1}).eq("id", user.id).execute()
-                    
                     st.success(f"Parsed {len(data)} items.")
                     st.download_button("📥 Download 4x6 PDF", pdf_output, "TCG_4x6.pdf", "application/pdf")
                 except Exception as e:
