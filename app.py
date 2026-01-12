@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-import io, re, time
+import io, re
 from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (PERFECTED HIGH-IMPACT UI) ---
+# --- 3. STYLING (HIGH-IMPACT UI) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -46,17 +46,17 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (22PT TOP-ALIGNED ADDRESS) ---
+# --- 4. THE DYNAMIC PDF CREATOR (STRICT 18PT BOLD) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
-    c.setFont("Helvetica-Bold", 22)
-    c.drawString(0.5 * inch, height - 0.5 * inch, data['buyer_name'])
-    c.drawString(0.5 * inch, height - 0.85 * inch, data['address'])
-    c.drawString(0.5 * inch, height - 1.20 * inch, data['city_state_zip'])
-    c.setLineWidth(2); c.line(0.5 * inch, height - 1.5 * inch, 7.5 * inch, height - 1.5 * inch)
-    c.setFont("Helvetica", 11); y_pos = height - 1.8 * inch
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
+    c.drawString(0.5 * inch, height - 1.30 * inch, data['address'])
+    c.drawString(0.5 * inch, height - 1.60 * inch, data['city_state_zip'])
+    c.setLineWidth(2); c.line(0.5 * inch, height - 1.9 * inch, 7.5 * inch, height - 1.9 * inch)
+    c.setFont("Helvetica", 11); y_pos = height - 2.2 * inch
     c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
     c.drawString(0.5 * inch, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
     c.drawString(0.5 * inch, y_pos - 0.44*inch, f"Buyer Name: {data['buyer_name']}")
@@ -84,7 +84,7 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION (FIXED LOGIN GLITCH) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -93,42 +93,25 @@ if "user" not in st.session_state:
     if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if res.user: 
+            if res.user:
                 st.session_state.user = res.user
                 st.rerun() 
         except: st.sidebar.error("Login Failed.")
     if r_col.button("Sign Up"):
-        try: 
+        try:
             supabase.auth.sign_up({"email": u_email, "password": u_pass})
-            st.sidebar.success("Account created! Now click Log In.")
+            st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (BULLETPROOF SYNC) ---
+# --- 6. DATABASE HANDSHAKE ---
 user = st.session_state.user
-profile = None
-# Attempt to fetch profile immediately
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-
-if profile_res.data:
-    profile = profile_res.data[0]
-else:
-    # If fetch fails, try a manual insert fallback to ensure session continuity
-    try:
-        supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
-        time.sleep(1) 
-        profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-        if profile_res.data: profile = profile_res.data[0]
-    except:
-        # If insert fails, it likely already exists from the trigger but is lagging. Wait once.
-        time.sleep(1.5)
-        profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-        if profile_res.data: profile = profile_res.data[0]
+profile = profile_res.data[0] if profile_res.data else None
 
 if not profile:
-    st.error("Profile synchronization error. Please click the button below to retry.")
-    if st.button("🔄 Refresh Connection"): st.rerun()
-    st.stop()
+    supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
+    profile = {"id": user.id, "credits": 0, "tier": "None"}
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
@@ -136,14 +119,17 @@ st.sidebar.write(f"Credits: **{profile['credits']}**")
 st.sidebar.write(f"Tier: **{'Active' if profile['credits'] > 0 else profile['tier']}**")
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
-if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+if st.sidebar.button("🚪 Log Out"):
+    st.session_state.clear()
+    supabase.auth.sign_out()
+    st.rerun()
 
-# --- 8. PRICING GATE (RE-ENABLED FOR NEW USERS) ---
-if profile['credits'] == 0 and profile['tier'] == 'None':
+# --- 8. RESTORED PRICING GATE (ALL TIERS) ---
+if profile['credits'] == 0 and profile['tier'] == "None":
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="big-stat">5</p><p class="label-text">Free Labels</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
             supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
     with colB:
@@ -168,15 +154,30 @@ if uploaded_file:
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
     lines = [l.strip() for l in text.split('\n') if l.strip()]
+    
     try:
         order_no = re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
         order_date = re.search(r"(\d{2}/\d{2}/\d{4})", text).group(1)
         ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line or "Shipping Address:" in line)
-        data = {'buyer_name': lines[ship_idx + 1], 'address': lines[ship_idx + 2], 'city_state_zip': lines[ship_idx + 3], 'date': order_date, 'order_no': order_no, 'method': "Standard (7-10 days)", 'seller': "ThePokeGeo"}
+        
+        data = {
+            'buyer_name': lines[ship_idx + 1],
+            'address': lines[ship_idx + 2],
+            'city_state_zip': lines[ship_idx + 3],
+            'date': order_date, 'order_no': order_no,
+            'method': "Standard (7-10 days)", 'seller': "ThePokeGeo"
+        }
+
         items = []
         item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, re.DOTALL)
         for qty, desc, price, total in item_rows:
             items.append({'qty': qty, 'desc': desc.replace('\n', ' ').strip(), 'price': f"${price}", 'total': f"${total}"})
+
         pdf_bytes = create_label_pdf(data, items)
-        st.download_button(label=f"📥 DOWNLOAD LABEL: {order_no}", data=pdf_bytes, file_name=f"TCGplayer_{order_no}.pdf", mime="application/pdf", use_container_width=True, on_click=lambda: (supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()))
-    except: st.error("Error reading file. Ensure it is a valid TCGplayer packing slip.")
+        st.download_button(
+            label=f"📥 DOWNLOAD LABEL: {order_no}",
+            data=pdf_bytes, file_name=f"TCGplayer_{order_no}.pdf", mime="application/pdf", use_container_width=True,
+            on_click=lambda: (supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute())
+        )
+    except:
+        st.error("Error reading file. Ensure it is a valid TCGplayer packing slip.")
