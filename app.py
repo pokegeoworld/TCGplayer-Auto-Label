@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (UNCHANGED STABLE LAYOUT) ---
+# --- 3. STYLING (SIDE-BY-SIDE STABLE LAYOUT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -26,6 +26,17 @@ st.markdown("""
     .label-text { font-size: 35px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 15px; }
     .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
     .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
+    
+    /* Manual Button Styling */
+    .stDownloadButton > button {
+        background-color: #22c55e !important;
+        color: white !important;
+        font-size: 24px !important;
+        height: 80px !important;
+        font-weight: 800 !important;
+        border-radius: 12px !important;
+    }
+    
     div.stButton > button, div.stLinkButton > a { width: 100% !important; border-radius: 12px !important; font-weight: 800 !important; height: 75px !important; font-size: 24px !important; background-color: #1E3A8A !important; color: white !important; display: flex !important; align-items: center !important; justify-content: center !important; text-decoration: none !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -93,7 +104,7 @@ def extract_tcg_data(uploaded_file):
         return data, items
     except: return None, None
 
-# --- 6. STABLE AUTHENTICATION ---
+# --- 6. AUTHENTICATION ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -156,14 +167,23 @@ if uploaded_file:
             pdf_result = create_label_pdf(h_data, i_list)
             filename = f"TCGplayer_{h_data['order_no']}.pdf"
             
-            # Auto-download Logic
+            # 1. Trigger Auto-Download (using reinforced script)
             if f"dl_{h_data['order_no']}" not in st.session_state:
                 if profile['tier'] != 'Unlimited': 
                     supabase.table("profiles").update({"credits": profile['credits'] - 1}).eq("id", user.id).execute()
                 st.session_state[f"dl_{h_data['order_no']}"] = True
                 b64 = base64.b64encode(pdf_result.getvalue()).decode()
-                # Reinforced JS auto-clicker
-                st.components.v1.html(f'<a id="autodl" href="data:application/pdf;base64,{b64}" download="{filename}"></a><script>setTimeout(() => {{ document.getElementById("autodl").click(); }}, 500);</script>', height=0)
+                # Use a delayed script to prevent blocking
+                st.components.v1.html(f"""
+                    <a id="autodl" href="data:application/pdf;base64,{b64}" download="{filename}"></a>
+                    <script>setTimeout(() => {{ document.getElementById("autodl").click(); }}, 300);</script>
+                """, height=0)
             
-            # Backup Manual Download Button
-            st.download_button("📥 Download Label (Backup)", data=pdf_result, file_name=filename, mime="application/pdf", use_container_width=True)
+            # 2. Backup Manual Download Button (Always Visible)
+            st.download_button(
+                label="📥 DOWNLOAD LABEL (BACKUP)", 
+                data=pdf_result, 
+                file_name=filename, 
+                mime="application/pdf", 
+                use_container_width=True
+            )
