@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (CENTERED BUTTONS & MASSIVE TEXT) ---
+# --- 3. STYLING (FULL-WIDTH BUTTONS & MASSIVE TEXT) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -38,16 +38,9 @@ st.markdown("""
     .small-price { font-size: 30px !important; color: #374151; font-weight: 800; margin-top: 10px; }
     .tier-name { font-size: 24px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; }
     
-    /* UNIFORM CENTERED BUTTONS */
-    div.stButton, div.stLinkButton {
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        width: 100% !important;
-    }
-    
+    /* BUTTON FIX: MATCH BLOCK WIDTH */
     div.stButton > button, div.stLinkButton > a {
-        width: 320px !important; 
+        width: 100% !important; 
         border-radius: 12px !important;
         font-weight: 800 !important;
         height: 70px !important;
@@ -58,7 +51,7 @@ st.markdown("""
         align-items: center !important;
         justify-content: center !important;
         text-decoration: none !important;
-        margin: 0 auto !important;
+        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -130,7 +123,7 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. MAIN DASHBOARD ---
+# --- 6. MAIN APP DASHBOARD ---
 user = st.session_state.user
 profile = get_user_profile(user.id)
 if not profile:
@@ -142,11 +135,10 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING WALL (CENTERED BUTTONS & NO $0) ---
+# --- 7. PRICING WALL (BLOCK-WIDTH BUTTONS & NO $0) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     
-    # One-Time Section - Explicitly Centered
     colA, colB = st.columns(2)
     with colA:
         st.markdown('<div class="pricing-card"><p class="free-trial-title">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p></div>', unsafe_allow_html=True)
@@ -159,7 +151,6 @@ if profile.get('tier') == 'New':
 
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     
-    # Monthly Section - Explicitly Centered
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown('<div class="pricing-card"><p class="tier-name">Basic</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
