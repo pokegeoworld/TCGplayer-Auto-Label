@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (68PX TITLE & WIDE SIDEBAR) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px; max-width: 450px; }
@@ -43,9 +43,7 @@ def get_user_profile(user_id):
 
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() + "\n"
+    text = "".join([p.extract_text() + "\n" for p in reader.pages])
     order_match = re.search(r"Order\s*Number:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
     items = []
@@ -82,7 +80,7 @@ def trigger_auto_download(pdf_bytes, filename):
     """
     st.components.v1.html(dl_link, height=0)
 
-# --- 5. AUTHENTICATION (FIXED 1-CLICK LOGIN) ---
+# --- 5. AUTHENTICATION (1-CLICK FIX) ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
@@ -90,23 +88,16 @@ if "user" not in st.session_state:
         st.subheader("Account Access")
         e, p = st.text_input("Email"), st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
-        login_btn = c1.form_submit_button("Log In")
-        signup_btn = c2.form_submit_button("Sign Up")
-
-        if login_btn:
+        if c1.form_submit_button("Log In"):
             try:
-                # Clear state to prevent first-click cache issues
-                res = supabase.auth.sign_in_with_password({"email": e, "password": p})
-                if res.user:
-                    st.session_state.user = res.user
-                    # Immediate rerun to bypass Streamlit's login delay
+                # Direct assignment and immediate rerun to force session recognition
+                auth_res = supabase.auth.sign_in_with_password({"email": e, "password": p})
+                if auth_res.user:
+                    st.session_state.user = auth_res.user
                     st.rerun()
-                else:
-                    st.error("Invalid credentials.")
-            except: 
+            except Exception as login_err:
                 st.error("Login failed. Check your password.")
-        
-        if signup_btn:
+        if c2.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
                 st.success("Success! Now click 'Log In'.")
