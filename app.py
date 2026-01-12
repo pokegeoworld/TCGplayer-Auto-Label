@@ -12,7 +12,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (SURGICAL LAYOUT & MASSIVE FONTS) ---
+# --- 3. STYLING (MATCHING AASDD.PNG) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -21,40 +21,34 @@ st.markdown("""
     .pricing-card { 
         border: 2px solid #e1e4e8; padding: 40px 20px; border-radius: 15px; 
         text-align: center; background: white; box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
-        min-height: 350px; display: flex; flex-direction: column; justify-content: center;
-        margin-bottom: 10px;
+        min-height: 380px; display: flex; flex-direction: column; justify-content: center;
     }
     .sub-header { 
-        background: linear-gradient(90deg, #1E3A8A, #3B82F6); color: white; 
-        padding: 20px; border-radius: 12px; text-align: center; font-weight: 900; 
-        margin: 45px auto 25px auto; font-size: 35px !important; 
+        background: #3B82F6; color: white; padding: 25px; border-radius: 12px; 
+        text-align: center; font-weight: 900; margin: 40px auto 25px auto; 
+        font-size: 40px !important; text-transform: uppercase; letter-spacing: 2px;
     }
     
-    /* FONT SCALING - NO /MO ON LABELS */
-    .free-trial-title { font-size: 55px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 15px; }
-    .big-stat { font-size: 85px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
-    .label-text { font-size: 32px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 10px; }
-    .small-price { font-size: 30px !important; color: #374151; font-weight: 800; margin-top: 10px; }
-    .tier-name { font-size: 24px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; }
+    /* FONT SIZES PER AASDD.PNG */
+    .free-trial-large { font-size: 65px !important; font-weight: 900; color: #1E3A8A; line-height: 1.1; margin-bottom: 20px; }
+    .big-stat { font-size: 90px !important; font-weight: 900; color: #1E3A8A; margin: 0; line-height: 1; }
+    .label-text { font-size: 35px !important; font-weight: 700; color: #1E3A8A; margin-bottom: 15px; }
+    .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
+    .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
     
-    /* TARGETED FIX: TOP ROW BUTTONS MATCH CARD WIDTH EXACTLY */
-    .top-row-btn div.stButton > button, .top-row-btn div.stLinkButton > a {
-        width: 100% !important; 
-        border-radius: 12px !important;
-        font-weight: 800 !important;
-        height: 70px !important;
-        font-size: 22px !important;
-        background-color: #1E3A8A !important;
-        color: white !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        text-decoration: none !important;
+    /* BUTTON UNIFORMITY */
+    div.stButton > button, div.stLinkButton > a {
+        width: 100% !important; border-radius: 12px !important;
+        font-weight: 800 !important; height: 75px !important;
+        font-size: 24px !important; background-color: #1E3A8A !important;
+        color: white !important; display: flex !important;
+        align-items: center !important; justify-content: center !important;
+        text-decoration: none !important; border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. CORE FUNCTIONS ---
+# --- 4. FUNCTIONS ---
 def get_user_profile(user_id):
     try:
         res = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
@@ -75,21 +69,22 @@ def extract_tcg_data(uploaded_file):
             items.append((qty, clean_desc))
     return items, order_no
 
-def create_label_pdf(items):
+def create_label_pdf(items, order_no):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=(4*inch, 6*inch))
-    x, y = 0.25*inch, 5.7*inch
-    can.setFont("Helvetica-Bold", 14); can.drawString(x, y, "TCGplayer Auto Labels")
-    y -= 0.4*inch; can.setFont("Helvetica", 10)
+    can.setFont("Helvetica-Bold", 16); can.drawString(0.25*inch, 5.6*inch, "TCGplayer Auto Label")
+    can.setFont("Helvetica", 10); can.drawString(0.25*inch, 5.4*inch, f"Order #: {order_no}")
+    can.setLineWidth(1); can.line(0.25*inch, 5.3*inch, 3.75*inch, 5.3*inch)
+    y_pos = 5.0*inch; can.setFont("Helvetica", 11)
     for qty, desc in items:
-        if y < 0.5*inch: can.showPage(); y = 5.7*inch; can.setFont("Helvetica", 10)
+        if y_pos < 0.5*inch: can.showPage(); y_pos = 5.5*inch; can.setFont("Helvetica", 11)
         full_text, limit = f"[{qty}x] {desc}", 3.5 * inch
         words, line = full_text.split(), ""
         for word in words:
-            if can.stringWidth(line + word + " ", "Helvetica", 10) < limit: line += word + " "
+            if can.stringWidth(line + word + " ", "Helvetica", 11) < limit: line += word + " "
             else:
-                can.drawString(x, y, line.strip()); y -= 0.15*inch; line = word + " "
-        can.drawString(x, y, line.strip()); y -= 0.25*inch
+                can.drawString(0.25*inch, y_pos, line.strip()); y_pos -= 0.18*inch; line = "      " + word + " "
+        can.drawString(0.25*inch, y_pos, line.strip()); y_pos -= 0.3*inch
     can.save(); packet.seek(0)
     return packet
 
@@ -132,33 +127,31 @@ if not profile:
 if st.sidebar.button("Log Out"):
     st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 7. PRICING VIEW ---
+# --- 7. PRICING WALL (EXACT MATCH TO PNG) ---
 if profile.get('tier') == 'New':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
+    
     colA, colB = st.columns(2)
     with colA:
-        st.markdown('<div class="pricing-card"><p class="free-trial-title">Free Trial</p><p class="big-stat">5</p><p class="label-text">Labels</p></div>', unsafe_allow_html=True)
-        st.markdown('<div class="top-row-btn">', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
         if st.button("Activate Free Trial"):
             supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute()
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
-        st.markdown('<div class="top-row-btn">', unsafe_allow_html=True)
         st.link_button("Buy Starter Pack", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
-        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
+    
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Basic</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
     with c2:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Pro</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
     with c3:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Unlimited</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pricing-card"><p class="tier-name">UNLIMITED</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True)
         st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
     st.stop()
 
@@ -171,7 +164,7 @@ if uploaded_file:
     if profile['tier'] == 'Unlimited' or profile['credits'] > 0:
         items, order_no = extract_tcg_data(uploaded_file)
         if items:
-            pdf_result = create_label_pdf(items)
+            pdf_result = create_label_pdf(items, order_no)
             filename = f"TCGplayer_{order_no}.pdf"
             if f"dl_{order_no}" not in st.session_state:
                 if profile['tier'] != 'Unlimited':
