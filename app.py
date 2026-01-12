@@ -43,7 +43,8 @@ st.markdown("""
         color: white !important; display: flex !important; align-items: center !important; 
         justify-content: center !important; text-decoration: none !important; border: none !important; 
     }
-    .glitch-note { color: #6B7280; font-size: 14px; font-style: italic; text-align: center; margin-top: 10px; }
+    /* HIGH POP RED TEXT FOR GLITCH NOTE */
+    .glitch-note-red { color: #FF0000; font-size: 16px; font-weight: 900; text-align: center; margin-top: 15px; border: 2px dashed #FF0000; padding: 10px; border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -85,10 +86,9 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (WITH USER NOTE) ---
+# --- 5. AUTHENTICATION ---
 if "user" not in st.session_state:
     try:
-        # Check for existing session
         session = supabase.auth.get_session()
         if session and session.user:
             st.session_state.user = session.user
@@ -114,14 +114,13 @@ if "user" not in st.session_state:
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
     
-    # User guidance text added here
-    st.sidebar.markdown('<p class="glitch-note">*Note: May need to click Log In twice to sync profile.</p>', unsafe_allow_html=True)
+    # RED POP TEXT ADDED HERE
+    st.sidebar.markdown('<p class="glitch-note-red">⚠️ NOTE: MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
 # --- 6. DATABASE HANDSHAKE ---
 user = st.session_state.user
 
-# Handle Stripe Success Redirect
 if st.query_params.get("payment") == "success":
     st.balloons()
     st.success("🎉 Payment Successful! Your credits have been updated.")
@@ -132,7 +131,6 @@ profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
 if not profile:
-    # Fallback to prevent hang
     try:
         supabase.table("profiles").upsert({"id": user.id, "credits": 0, "tier": "None"}).execute()
         profile = {"id": user.id, "credits": 0, "tier": "None"}
