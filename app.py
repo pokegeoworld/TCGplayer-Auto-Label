@@ -84,13 +84,21 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. PERSISTENT AUTHENTICATION (FIXES REFRESH & SINGLE-CLICK LOGIN) ---
+# --- 5. PERSISTENT AUTHENTICATION (FIXED ATTRIBUTEERROR) ---
 if "user" not in st.session_state:
-    # 5a. Try to recover existing session from the database connection
-    res = supabase.auth.get_user()
-    if res.user:
-        st.session_state.user = res.user
-        st.rerun()
+    try:
+        # Check for existing session
+        session_res = supabase.auth.get_session()
+        if session_res and hasattr(session_res, 'user') and session_res.user:
+            st.session_state.user = session_res.user
+            st.rerun()
+        # Alternative check if get_session() structure varies
+        user_res = supabase.auth.get_user()
+        if user_res and hasattr(user_res, 'user') and user_res.user:
+            st.session_state.user = user_res.user
+            st.rerun()
+    except:
+        pass
 
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -101,9 +109,9 @@ if "user" not in st.session_state:
     if l_col.button("Log In"):
         try:
             auth_res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if auth_res.user:
+            if auth_res and hasattr(auth_res, 'user') and auth_res.user:
                 st.session_state.user = auth_res.user
-                st.rerun() # Immediate rerun ensures one-click success
+                st.rerun()
         except: st.sidebar.error("Login Failed.")
     if r_col.button("Sign Up"):
         try:
@@ -112,7 +120,7 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (ZERO-GLITCH PROFILE SYNC) ---
+# --- 6. DATABASE HANDSHAKE ---
 user = st.session_state.user
 
 # Handle Stripe Success Redirect
@@ -122,9 +130,9 @@ if st.query_params.get("payment") == "success":
     time.sleep(1.5)
     st.query_params.clear()
 
-# Improved handshake with aggressive retry logic
+# Wait loop for profile sync
 profile = None
-for _ in range(10): # Try for 5 seconds total
+for _ in range(10):
     profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
     if profile_res.data:
         profile = profile_res.data[0]
@@ -132,7 +140,6 @@ for _ in range(10): # Try for 5 seconds total
     time.sleep(0.5)
 
 if not profile:
-    # Final fallback if SQL trigger is non-responsive
     supabase.table("profiles").upsert({"id": user.id, "credits": 0, "tier": "None"}).execute()
     profile = {"id": user.id, "credits": 0, "tier": "None"}
 
