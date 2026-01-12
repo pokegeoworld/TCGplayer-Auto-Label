@@ -33,18 +33,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE SELF-HEALING PROFILE LOGIC ---
-def sync_user_profile(user_id):
-    # Try to get existing profile
-    res = supabase.table("profiles").select("*").eq("id", user_id).execute()
-    if len(res.data) > 0:
-        return res.data[0]
-    else:
-        # Create it if it doesn't exist (Zero-Trigger approach)
-        try:
+# --- 4. LOGIC FUNCTIONS ---
+def get_or_create_profile(user_id):
+    try:
+        res = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        if res.data:
+            return res.data[0]
+        else:
             new_prof = supabase.table("profiles").insert({"id": user_id, "credits": 5, "tier": "free"}).execute()
             return new_prof.data[0]
-        except: return None
+    except Exception as e:
+        st.error(f"Profile Sync Error: {e}")
+        return None
 
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
@@ -64,31 +64,31 @@ def create_label_pdf(items):
     can.save(); packet.seek(0)
     return packet
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION SIDEBAR ---
 if "user" not in st.session_state:
     st.markdown('<p class="hero-title">TCGplay Auto Label Creator</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
     with st.sidebar.form("auth"):
+        st.subheader("Account Access")
         e, p = st.text_input("Email"), st.text_input("Password", type="password")
         c1, c2 = st.columns(2)
         if c1.form_submit_button("Log In"):
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
                 st.session_state.user = res.user; st.rerun()
-            except: st.sidebar.error("Login failed.")
+            except Exception as e: st.sidebar.error(f"Login Failed: {e}")
         if c2.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
-                st.sidebar.success("Success! Please log in.")
-            except: st.sidebar.error("Signup failed.")
+                st.sidebar.success("Account created! Now click 'Log In'.")
+            except Exception as e: st.sidebar.error(f"Signup Failed: {e}")
     st.stop()
 
-# --- 6. MAIN APP ---
+# --- 6. MAIN DASHBOARD ---
 user = st.session_state.user
-profile = sync_user_profile(user.id)
+profile = get_or_create_profile(user.id)
 
 if not profile:
-    st.error("Database Connection Error. Ensure you ran the SQL 'sync_profile_policy'.")
     st.stop()
 
 st.sidebar.write(f"Credits: **{profile['credits']}**")
@@ -98,7 +98,7 @@ if st.sidebar.button("Log Out"):
 st.markdown('<p class="hero-title">TCGplay Auto Label Creator</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
 
-file = st.file_uploader("Upload PDF", type="pdf")
+file = st.file_uploader("Upload Packing Slip PDF", type="pdf")
 if file and st.button("Generate 4x6 Labels"):
     if profile['credits'] > 0:
         items = extract_tcg_data(file)
@@ -106,6 +106,6 @@ if file and st.button("Generate 4x6 Labels"):
             pdf = create_label_pdf(items)
             new_c = profile['credits'] - 1
             supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
-            st.success("Labels Ready!"); st.download_button("📥 Download", pdf, "Labels.pdf")
+            st.success("Labels Generated!"); st.download_button("📥 Download PDF", pdf, "Labels.pdf")
         else: st.error("No items found.")
     else: st.error("Out of credits.")
