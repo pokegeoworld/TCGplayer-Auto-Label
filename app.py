@@ -44,12 +44,15 @@ def get_user_profile(user_id):
 def extract_tcg_data(uploaded_file):
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
-    # Extract items
-    items = re.findall(r"(\d+)\s+(.*?)\s+\[(.*?)\]", text)
-    # Extract Order Number (Looking for Order #: followed by digits)
-    order_match = re.search(r"Order\s*#:\s*(\d+)", text)
+    
+    # IMPROVED REGEX: Captures "Qty Name [SetName]" even with extra spaces or tabs
+    items = re.findall(r"(\d+)\s+([\w\s\'\-\,\!\.\?\(\)]+)\s+\[(.*?)\]", text)
+    
+    # Extract Order Number
+    order_match = re.search(r"Order\s*#:\s*(\d+)", text, re.IGNORECASE)
     order_no = order_match.group(1) if order_match else "Unknown"
-    return items, order_no
+    
+    return items, order_no, text
 
 def create_label_pdf(items):
     packet = io.BytesIO()
@@ -60,7 +63,9 @@ def create_label_pdf(items):
     for qty, name, set_name in items:
         if y < 0.8*inch:
             can.showPage(); y = 5.75*inch; can.setFont("Helvetica", 11)
-        can.drawString(x, y, f"[{qty}x] {name} - {set_name}"); y -= lh
+        # Clean up whitespace from name
+        clean_name = name.strip()
+        can.drawString(x, y, f"[{qty}x] {clean_name} - {set_name}"); y -= lh
     
     can.setFont("Helvetica-Oblique", 8); can.setStrokeColorRGB(0.8, 0.8, 0.8)
     can.line(0.25*inch, 0.5*inch, 3.75*inch, 0.5*inch)
@@ -86,10 +91,9 @@ if "user" not in st.session_state:
     st.markdown('<p class="hero-subtitle">Fast and automated thermal label printer creator for TCGplayer packing slips</p>', unsafe_allow_html=True)
     with st.sidebar.form("auth"):
         st.subheader("Account Access")
-        e = st.text_input("Email")
-        p = st.text_input("Password", type="password")
-        col1, col2 = st.columns(2)
-        if col1.form_submit_button("Log In"):
+        e, p = st.text_input("Email"), st.text_input("Password", type="password")
+        c1, c2 = st.columns(2)
+        if c1.form_submit_button("Log In"):
             st.session_state.clear()
             try:
                 res = supabase.auth.sign_in_with_password({"email": e, "password": p})
@@ -97,7 +101,7 @@ if "user" not in st.session_state:
                     st.session_state.user = res.user
                     st.rerun()
             except: st.error("Login failed.")
-        if col2.form_submit_button("Sign Up"):
+        if c2.form_submit_button("Sign Up"):
             try:
                 supabase.auth.sign_up({"email": e, "password": p})
                 st.success("Success! Please Log In.")
@@ -112,8 +116,7 @@ if not profile:
     try:
         supabase.table("profiles").insert({"id": user.id, "credits": 10}).execute()
         profile = get_user_profile(user.id)
-    except:
-        st.error("Session sync error."); st.stop()
+    except: st.error("Sync error."); st.stop()
 
 st.sidebar.write(f"Logged in: **{user.email}**")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
@@ -129,20 +132,21 @@ uploaded_file = st.file_uploader("Upload TCGplayer PDF to Auto-Download Label", 
 
 if uploaded_file:
     if profile['credits'] > 0:
-        items, order_no = extract_tcg_data(uploaded_file)
+        items, order_no, raw_text = extract_tcg_data(uploaded_file)
         if items:
             pdf_result = create_label_pdf(items)
             filename = f"TCGplayer_{order_no}.pdf"
             
-            # Deduct credit
+            # Update Credits
             new_c = profile['credits'] - 1
             supabase.table("profiles").update({"credits": new_c}).eq("id", user.id).execute()
             
-            # Trigger Auto Download
+            # Execute Download
             auto_download(pdf_result, filename)
             st.success(f"Downloading {filename}...")
-            st.info("Check your browser downloads folder.")
         else:
-            st.error("No item data found in PDF.")
+            st.error("No item data found in PDF. The layout might be different.")
+            with st.expander("Debug: See Raw PDF Text"):
+                st.code(raw_text)
     else:
         st.error("Out of credits.")
