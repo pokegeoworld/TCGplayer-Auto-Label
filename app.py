@@ -26,7 +26,7 @@ st.markdown("""
     .small-price { font-size: 32px !important; color: #374151; font-weight: 800; margin-top: 15px; }
     .tier-name { font-size: 26px !important; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; }
     .sub-header { background: #3B82F6; color: white; padding: 25px; border-radius: 12px; text-align: center; font-weight: 900; margin: 40px auto 25px auto; font-size: 40px !important; text-transform: uppercase; }
-    
+   
     .stDownloadButton > button {
         background-color: #15803d !important;
         color: white !important;
@@ -36,12 +36,12 @@ st.markdown("""
         border-radius: 12px !important;
         border: 2px solid #14532d !important;
     }
-    
-    div.stButton > button, div.stLinkButton > a { 
-        width: 100% !important; border-radius: 12px !important; font-weight: 800 !important; 
-        height: 75px !important; font-size: 24px !important; background-color: #1E3A8A !important; 
-        color: white !important; display: flex !important; align-items: center !important; 
-        justify-content: center !important; text-decoration: none !important; border: none !important; 
+   
+    div.stButton > button, div.stLinkButton > a {
+        width: 100% !important; border-radius: 12px !important; font-weight: 800 !important;
+        height: 75px !important; font-size: 24px !important; background-color: #1E3A8A !important;
+        color: white !important; display: flex !important; align-items: center !important;
+        justify-content: center !important; text-decoration: none !important; border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -79,7 +79,7 @@ def create_label_pdf(data, items):
             c.drawString(1.0 * inch, y_pos, line); y_pos -= 0.18 * inch
         total_qty += int(item['qty']); grand_total += float(item['total'].replace('$', '').replace(',', '')); y_pos -= 0.07 * inch
     y_pos -= 0.3 * inch; c.line(0.5 * inch, y_pos + 0.15 * inch, 7.8 * inch, y_pos + 0.15 * inch)
-    c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
+    c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items")
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
     c.save(); packet.seek(0)
     return packet.getvalue()
@@ -95,7 +95,7 @@ if "user" not in st.session_state:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
             if res.user:
                 st.session_state.user = res.user
-                st.rerun() 
+                st.rerun()
         except: st.sidebar.error("Login Failed.")
     if r_col.button("Sign Up"):
         try:
@@ -104,14 +104,31 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE ---
+# --- 6. DATABASE HANDSHAKE (FIXED DUPLICATE KEY CRASH) ---
 user = st.session_state.user
-profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-profile = profile_res.data[0] if profile_res.data else None
 
-if not profile:
-    supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
-    profile = {"id": user.id, "credits": 0, "tier": "None"}
+# First try to fetch existing profile
+profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+
+if not profile_res.data:
+    # Profile doesn't exist → try to create it
+    try:
+        supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
+    except Exception as e:
+        # Ignore duplicate key violation (most common cause of failure here)
+        if "duplicate" not in str(e).lower() and "unique" not in str(e).lower():
+            st.error(f"Profile creation failed: {str(e)}")
+            st.stop()
+
+# Now fetch the profile again (it should exist now, whether we inserted or it already was there)
+profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+
+if profile_res.data:
+    profile = profile_res.data[0]
+else:
+    # Very rare fallback — should almost never hit this
+    st.error("Could not load or create your profile. Please try logging out and back in.")
+    st.stop()
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
@@ -135,7 +152,7 @@ if profile['credits'] == 0 and profile['tier'] == "None":
     with colB:
         st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
         st.link_button("Buy Starter", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
-    
+   
     st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -149,17 +166,16 @@ if profile['credits'] == 0 and profile['tier'] == "None":
 # --- 9. DYNAMIC CREATOR VIEW ---
 st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader("Upload TCGplayer PDF", type="pdf")
-
 if uploaded_file:
     reader = PdfReader(uploaded_file)
     text = "".join([p.extract_text() + "\n" for p in reader.pages])
     lines = [l.strip() for l in text.split('\n') if l.strip()]
-    
+   
     try:
         order_no = re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
         order_date = re.search(r"(\d{2}/\d{2}/\d{4})", text).group(1)
         ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line or "Shipping Address:" in line)
-        
+       
         data = {
             'buyer_name': lines[ship_idx + 1],
             'address': lines[ship_idx + 2],
@@ -167,12 +183,10 @@ if uploaded_file:
             'date': order_date, 'order_no': order_no,
             'method': "Standard (7-10 days)", 'seller': "ThePokeGeo"
         }
-
         items = []
         item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, re.DOTALL)
         for qty, desc, price, total in item_rows:
             items.append({'qty': qty, 'desc': desc.replace('\n', ' ').strip(), 'price': f"${price}", 'total': f"${total}"})
-
         pdf_bytes = create_label_pdf(data, items)
         st.download_button(
             label=f"📥 DOWNLOAD LABEL: {order_no}",
