@@ -43,6 +43,7 @@ st.markdown("""
         color: white !important; display: flex !important; align-items: center !important; 
         justify-content: center !important; text-decoration: none !important; border: none !important; 
     }
+    .glitch-note { color: #6B7280; font-size: 14px; font-style: italic; text-align: center; margin-top: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -84,21 +85,15 @@ def create_label_pdf(data, items):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. PERSISTENT AUTHENTICATION (FIXED ATTRIBUTEERROR) ---
+# --- 5. AUTHENTICATION (WITH USER NOTE) ---
 if "user" not in st.session_state:
     try:
         # Check for existing session
-        session_res = supabase.auth.get_session()
-        if session_res and hasattr(session_res, 'user') and session_res.user:
-            st.session_state.user = session_res.user
+        session = supabase.auth.get_session()
+        if session and session.user:
+            st.session_state.user = session.user
             st.rerun()
-        # Alternative check if get_session() structure varies
-        user_res = supabase.auth.get_user()
-        if user_res and hasattr(user_res, 'user') and user_res.user:
-            st.session_state.user = user_res.user
-            st.rerun()
-    except:
-        pass
+    except: pass
 
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
@@ -108,9 +103,9 @@ if "user" not in st.session_state:
     
     if l_col.button("Log In"):
         try:
-            auth_res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if auth_res and hasattr(auth_res, 'user') and auth_res.user:
-                st.session_state.user = auth_res.user
+            res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
+            if res.user:
+                st.session_state.user = res.user
                 st.rerun()
         except: st.sidebar.error("Login Failed.")
     if r_col.button("Sign Up"):
@@ -118,6 +113,9 @@ if "user" not in st.session_state:
             supabase.auth.sign_up({"email": u_email, "password": u_pass})
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
+    
+    # User guidance text added here
+    st.sidebar.markdown('<p class="glitch-note">*Note: May need to click Log In twice to sync profile.</p>', unsafe_allow_html=True)
     st.stop()
 
 # --- 6. DATABASE HANDSHAKE ---
@@ -130,18 +128,17 @@ if st.query_params.get("payment") == "success":
     time.sleep(1.5)
     st.query_params.clear()
 
-# Wait loop for profile sync
-profile = None
-for _ in range(10):
-    profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
-    if profile_res.data:
-        profile = profile_res.data[0]
-        break
-    time.sleep(0.5)
+profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+profile = profile_res.data[0] if profile_res.data else None
 
 if not profile:
-    supabase.table("profiles").upsert({"id": user.id, "credits": 0, "tier": "None"}).execute()
-    profile = {"id": user.id, "credits": 0, "tier": "None"}
+    # Fallback to prevent hang
+    try:
+        supabase.table("profiles").upsert({"id": user.id, "credits": 0, "tier": "None"}).execute()
+        profile = {"id": user.id, "credits": 0, "tier": "None"}
+    except:
+        st.error("Profile sync in progress... please refresh page.")
+        st.stop()
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
