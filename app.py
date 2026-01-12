@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (HIGH-IMPACT UI) ---
+# --- 3. STYLING (PERFECTED HIGH-IMPACT UI) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -46,38 +46,26 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (ENLARGED TOP-ALIGNED ADDRESS) ---
+# --- 4. THE DYNAMIC PDF CREATOR (22PT TOP-ALIGNED ADDRESS) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
-    
-    # ENLARGED ADDRESS (22PT BOLD) ALIGNED TO TOP (0.5" from edge)
     c.setFont("Helvetica-Bold", 22)
     c.drawString(0.5 * inch, height - 0.5 * inch, data['buyer_name'])
     c.drawString(0.5 * inch, height - 0.85 * inch, data['address'])
     c.drawString(0.5 * inch, height - 1.20 * inch, data['city_state_zip'])
-    
-    c.setLineWidth(2)
-    c.line(0.5 * inch, height - 1.5 * inch, 7.5 * inch, height - 1.5 * inch)
-
-    # Order Summary (11PT)
-    c.setFont("Helvetica", 11)
-    y_pos = height - 1.8 * inch
+    c.setLineWidth(2); c.line(0.5 * inch, height - 1.5 * inch, 7.5 * inch, height - 1.5 * inch)
+    c.setFont("Helvetica", 11); y_pos = height - 1.8 * inch
     c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
     c.drawString(0.5 * inch, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
     c.drawString(0.5 * inch, y_pos - 0.44*inch, f"Buyer Name: {data['buyer_name']}")
     c.drawString(0.5 * inch, y_pos - 0.66*inch, "Seller Name: ThePokeGeo")
     c.drawString(0.5 * inch, y_pos - 0.88*inch, f"Order Number: {data['order_no']}")
-    
-    # Items Table Header
-    y_pos -= 1.3 * inch
-    c.setFont("Helvetica-Bold", 12)
+    y_pos -= 1.3 * inch; c.setFont("Helvetica-Bold", 12)
     c.drawString(0.5 * inch, y_pos, "Qty"); c.drawString(1.0 * inch, y_pos, "Description")
     c.drawString(6.6 * inch, y_pos, "Price"); c.drawString(7.2 * inch, y_pos, "Total")
-    
     y_pos -= 0.1 * inch; c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos); y_pos -= 0.25 * inch
-    
     font_name, font_size = "Helvetica", 9.5; c.setFont(font_name, font_size)
     total_qty, grand_total = 0, 0.0
     for item in items:
@@ -90,7 +78,6 @@ def create_label_pdf(data, items):
         for line in wrapped_lines:
             c.drawString(1.0 * inch, y_pos, line); y_pos -= 0.18 * inch
         total_qty += int(item['qty']); grand_total += float(item['total'].replace('$', '').replace(',', '')); y_pos -= 0.07 * inch
-    
     y_pos -= 0.3 * inch; c.line(0.5 * inch, y_pos + 0.15 * inch, 7.8 * inch, y_pos + 0.15 * inch)
     c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
@@ -113,24 +100,28 @@ if "user" not in st.session_state:
         except: st.sidebar.error("Signup failed.")
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE ---
+# --- 6. DATABASE HANDSHAKE (FIXED: NO MANUAL INSERT) ---
 user = st.session_state.user
+# Only Read. The SQL Trigger handles the creation
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
+
+# If for some extreme reason the trigger hasn't finished, wait 1 second and retry
 if not profile:
-    supabase.table("profiles").insert({"id": user.id, "credits": 0, "tier": "None"}).execute()
-    profile = {"id": user.id, "credits": 0, "tier": "None"}
+    time.sleep(1)
+    profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
+    profile = profile_res.data[0] if profile_res.data else None
 
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
-st.sidebar.write(f"Credits: **{profile['credits']}**")
-st.sidebar.write(f"Tier: **{'Active' if profile['credits'] > 0 else profile['tier']}**")
+st.sidebar.write(f"Credits: **{profile['credits'] if profile else 0}**")
+st.sidebar.write(f"Tier: **{profile['tier'] if profile and profile['credits'] == 0 else 'Active'}**")
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
-if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
+if st.sidebar.button("Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 8. PRICING GATE (ALL TIERS) ---
-if profile['credits'] == 0 and profile['tier'] == "None":
+# --- 8. PRICING GATE ---
+if profile and profile.get('credits') == 0 and profile.get('tier') == 'None':
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
     with colA:
