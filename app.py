@@ -141,7 +141,11 @@ if not profile:
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
-st.sidebar.write(f"Tier: **{'Active' if profile['credits'] > 0 else profile['tier']}**")
+
+# VIP priority logic added here
+display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if profile['credits'] > 0 else profile['tier'])
+st.sidebar.write(f"Tier: **{display_tier}**")
+
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("🚪 Log Out"):
