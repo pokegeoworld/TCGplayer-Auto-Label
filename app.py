@@ -83,6 +83,11 @@ def create_label_pdf(data, items):
     y_pos -= 0.3 * inch; c.line(0.5 * inch, y_pos + 0.15 * inch, 7.8 * inch, y_pos + 0.15 * inch)
     c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
+    
+    # --- PROMOTIONAL TEXT (CENTERED AT BOTTOM) ---
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(width / 2.0, 0.5 * inch, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
+    
     c.save(); packet.seek(0)
     return packet.getvalue()
 
@@ -114,7 +119,6 @@ if "user" not in st.session_state:
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
     
-    # RED POP TEXT ADDED HERE
     st.sidebar.markdown('<p class="glitch-note-red">⚠️ NOTE: MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
@@ -142,7 +146,6 @@ if not profile:
 st.sidebar.title(f"👤 {user.email}")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
 
-# VIP priority logic added here
 display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if profile['credits'] > 0 else profile['tier'])
 st.sidebar.write(f"Tier: **{display_tier}**")
 
