@@ -44,7 +44,6 @@ st.markdown("""
         justify-content: center !important; text-decoration: none !important; border: none !important; 
     }
     
-    /* REDUCED SIZE TO PREVENT WRAPPING */
     .glitch-note-red { 
         color: #FF0000; 
         font-size: 11px; 
@@ -57,18 +56,12 @@ st.markdown("""
         white-space: nowrap;
     }
 
-    /* --- MOBILE SPECIFIC OVERRIDES --- */
     @media only screen and (max-width: 600px) {
         .hero-title { font-size: 38px !important; margin-top: 0px !important; }
         .free-trial-large { font-size: 35px !important; }
         .big-stat { font-size: 50px !important; }
         .sub-header { font-size: 24px !important; padding: 15px !important; }
-        
-        [data-testid="stSidebar"] { 
-            min-width: 0px !important; 
-            max-width: 100vw !important; 
-            width: auto !important;
-        }
+        [data-testid="stSidebar"] { min-width: 0px !important; max-width: 100vw !important; width: auto !important; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -115,7 +108,6 @@ def create_label_pdf(data, items):
     c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
     
-    # --- PROMOTIONAL TEXT ---
     y_pos -= 0.35 * inch 
     c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width / 2.0, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
@@ -151,7 +143,6 @@ if "user" not in st.session_state:
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
     
-    # "NOTE:" REMOVED HERE
     st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
@@ -178,10 +169,8 @@ if not profile:
 # --- 7. SIDEBAR USERNAME & PROFILE ---
 st.sidebar.title(f"👤 {user.email}")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
-
 display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if profile['credits'] > 0 else profile['tier'])
 st.sidebar.write(f"Tier: **{display_tier}**")
-
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("🚪 Log Out"):
@@ -234,7 +223,7 @@ if uploaded_file:
         }
 
         items = []
-        item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, use_container_width=True)
+        item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, re.DOTALL)
         for qty, desc, price, total in item_rows:
             items.append({'qty': qty, 'desc': desc.replace('\n', ' ').strip(), 'price': f"${price}", 'total': f"${total}"})
 
