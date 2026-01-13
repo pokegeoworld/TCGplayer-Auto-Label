@@ -44,16 +44,17 @@ st.markdown("""
         justify-content: center !important; text-decoration: none !important; border: none !important; 
     }
     
-    /* SMALLER RED TEXT TO FIT ONE LINE */
+    /* REDUCED SIZE TO PREVENT WRAPPING */
     .glitch-note-red { 
         color: #FF0000; 
-        font-size: 13px; 
+        font-size: 11px; 
         font-weight: 900; 
         text-align: center; 
         margin-top: 15px; 
         border: 2px dashed #FF0000; 
         padding: 8px; 
         border-radius: 8px; 
+        white-space: nowrap;
     }
 
     /* --- MOBILE SPECIFIC OVERRIDES --- */
@@ -150,7 +151,8 @@ if "user" not in st.session_state:
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
     
-    st.sidebar.markdown('<p class="glitch-note-red">⚠️ NOTE: MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
+    # "NOTE:" REMOVED HERE
+    st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
 # --- 6. DATABASE HANDSHAKE ---
@@ -232,7 +234,7 @@ if uploaded_file:
         }
 
         items = []
-        item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, re.DOTALL)
+        item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, use_container_width=True)
         for qty, desc, price, total in item_rows:
             items.append({'qty': qty, 'desc': desc.replace('\n', ' ').strip(), 'price': f"${price}", 'total': f"${total}"})
 
