@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (HIGH-IMPACT UI) ---
+# --- 3. STYLING (HIGH-IMPACT UI + MOBILE OPTIMIZATION) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -43,8 +43,16 @@ st.markdown("""
         color: white !important; display: flex !important; align-items: center !important; 
         justify-content: center !important; text-decoration: none !important; border: none !important; 
     }
-    /* HIGH POP RED TEXT FOR GLITCH NOTE */
     .glitch-note-red { color: #FF0000; font-size: 16px; font-weight: 900; text-align: center; margin-top: 15px; border: 2px dashed #FF0000; padding: 10px; border-radius: 8px; }
+
+    /* --- MOBILE SPECIFIC OVERRIDES --- */
+    @media only screen and (max-width: 600px) {
+        .hero-title { font-size: 38px !important; margin-top: 0px !important; }
+        .free-trial-large { font-size: 35px !important; }
+        .big-stat { font-size: 50px !important; }
+        .sub-header { font-size: 24px !important; padding: 15px !important; }
+        [data-testid="stSidebar"] { min-width: 100% !important; }
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -84,10 +92,10 @@ def create_label_pdf(data, items):
     c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
     
-    # --- PROMOTIONAL TEXT (DYNAMICALLY BELOW TOTALS) ---
-    y_pos -= 0.25 * inch # Spacing set to 0.25 inches
+    # --- PROMOTIONAL TEXT (CENTERED 0.5 INCHES BELOW TOTALS) ---
+    y_pos -= 0.5 * inch # Spacing
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(0.5 * inch, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
+    c.drawCentredString(width / 2.0, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
     
     c.save(); packet.seek(0)
     return packet.getvalue()
