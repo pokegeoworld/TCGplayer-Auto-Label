@@ -43,7 +43,18 @@ st.markdown("""
         color: white !important; display: flex !important; align-items: center !important; 
         justify-content: center !important; text-decoration: none !important; border: none !important; 
     }
-    .glitch-note-red { color: #FF0000; font-size: 16px; font-weight: 900; text-align: center; margin-top: 15px; border: 2px dashed #FF0000; padding: 10px; border-radius: 8px; }
+    
+    /* SMALLER RED TEXT TO FIT ONE LINE */
+    .glitch-note-red { 
+        color: #FF0000; 
+        font-size: 13px; 
+        font-weight: 900; 
+        text-align: center; 
+        margin-top: 15px; 
+        border: 2px dashed #FF0000; 
+        padding: 8px; 
+        border-radius: 8px; 
+    }
 
     /* --- MOBILE SPECIFIC OVERRIDES --- */
     @media only screen and (max-width: 600px) {
@@ -61,26 +72,31 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (STRICT 18PT BOLD + 14PT PROMO) ---
+# --- 4. THE DYNAMIC PDF CREATOR (STRICT 22PT BOLD NAME/ADDRESS) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
-    c.setFont("Helvetica-Bold", 18)
+    
+    c.setFont("Helvetica-Bold", 22) 
     c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
-    c.drawString(0.5 * inch, height - 1.30 * inch, data['address'])
-    c.drawString(0.5 * inch, height - 1.60 * inch, data['city_state_zip'])
-    c.setLineWidth(2); c.line(0.5 * inch, height - 1.9 * inch, 7.5 * inch, height - 1.9 * inch)
-    c.setFont("Helvetica", 11); y_pos = height - 2.2 * inch
+    c.drawString(0.5 * inch, height - 1.35 * inch, data['address'])
+    c.drawString(0.5 * inch, height - 1.70 * inch, data['city_state_zip'])
+    
+    c.setLineWidth(2); c.line(0.5 * inch, height - 2.0 * inch, 7.5 * inch, height - 2.0 * inch)
+    
+    c.setFont("Helvetica", 11); y_pos = height - 2.3 * inch
     c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
     c.drawString(0.5 * inch, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
     c.drawString(0.5 * inch, y_pos - 0.44*inch, f"Buyer Name: {data['buyer_name']}")
     c.drawString(0.5 * inch, y_pos - 0.66*inch, "Seller Name: ThePokeGeo")
     c.drawString(0.5 * inch, y_pos - 0.88*inch, f"Order Number: {data['order_no']}")
+    
     y_pos -= 1.3 * inch; c.setFont("Helvetica-Bold", 12)
     c.drawString(0.5 * inch, y_pos, "Qty"); c.drawString(1.0 * inch, y_pos, "Description")
     c.drawString(6.6 * inch, y_pos, "Price"); c.drawString(7.2 * inch, y_pos, "Total")
     y_pos -= 0.1 * inch; c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos); y_pos -= 0.25 * inch
+    
     font_name, font_size = "Helvetica", 9.5; c.setFont(font_name, font_size)
     total_qty, grand_total = 0, 0.0
     for item in items:
@@ -93,13 +109,14 @@ def create_label_pdf(data, items):
         for line in wrapped_lines:
             c.drawString(1.0 * inch, y_pos, line); y_pos -= 0.18 * inch
         total_qty += int(item['qty']); grand_total += float(item['total'].replace('$', '').replace(',', '')); y_pos -= 0.07 * inch
+        
     y_pos -= 0.3 * inch; c.line(0.5 * inch, y_pos + 0.15 * inch, 7.8 * inch, y_pos + 0.15 * inch)
     c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
     
-    # --- PROMOTIONAL TEXT (CENTERED 0.35 INCHES BELOW TOTALS) ---
+    # --- PROMOTIONAL TEXT ---
     y_pos -= 0.35 * inch 
-    c.setFont("Helvetica-Bold", 14) # Size set to 14pt
+    c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width / 2.0, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
     
     c.save(); packet.seek(0)
