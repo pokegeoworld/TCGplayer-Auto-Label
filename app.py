@@ -84,9 +84,10 @@ def create_label_pdf(data, items):
     c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
     
-    # --- PROMOTIONAL TEXT (CENTERED AT BOTTOM) ---
+    # --- PROMOTIONAL TEXT (DYNAMICALLY BELOW TOTALS) ---
+    y_pos -= 0.25 * inch # Spacing set to 0.25 inches
     c.setFont("Helvetica-Bold", 10)
-    c.drawCentredString(width / 2.0, 0.5 * inch, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
+    c.drawString(0.5 * inch, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
     
     c.save(); packet.seek(0)
     return packet.getvalue()
