@@ -66,16 +66,24 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (STRICT 22PT BOLD NAME/ADDRESS) ---
+# --- 4. THE DYNAMIC PDF CREATOR (SPLIT HEADER: BUYER LEFT / RETURN RIGHT) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
     
+    # 1. Left Side: Buyer Info (22pt)
     c.setFont("Helvetica-Bold", 22) 
     c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
     c.drawString(0.5 * inch, height - 1.35 * inch, data['address'])
     c.drawString(0.5 * inch, height - 1.70 * inch, data['city_state_zip'])
+    
+    # 2. Right Side: Return Address (11pt to fit)
+    c.setFont("Helvetica", 11)
+    right_x = 4.5 * inch
+    c.drawString(right_x, height - 1.0 * inch, "Poke Geo")
+    c.drawString(right_x, height - 1.20 * inch, "36 Michael Anthony Ln")
+    c.drawString(right_x, height - 1.40 * inch, "Depew, NY 14043")
     
     c.setLineWidth(2); c.line(0.5 * inch, height - 2.0 * inch, 7.5 * inch, height - 2.0 * inch)
     
