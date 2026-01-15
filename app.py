@@ -60,34 +60,34 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (BALANCED 16PT HEADER) ---
+# --- 4. THE DYNAMIC PDF CREATOR (BALANCED 18PT HEADER) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
     
-    # Unified Font Size for both sides
-    header_font_size = 16
+    # Unified Font Size set to 18pt
+    header_font_size = 18
     c.setFont("Helvetica-Bold", header_font_size)
     
-    # Left Side: Buyer Info Indented
+    # Left Side: Buyer Info
     left_x = 0.5 * inch
     c.drawString(left_x, height - 1.0 * inch, data['buyer_name'])
-    c.drawString(left_x, height - 1.25 * inch, data['address'])
-    c.drawString(left_x, height - 1.50 * inch, data['city_state_zip'])
+    c.drawString(left_x, height - 1.30 * inch, data['address'])
+    c.drawString(left_x, height - 1.60 * inch, data['city_state_zip'])
     
-    # Right Side: Return Address Indented from Right
-    right_x = 5.2 * inch
+    # Right Side: Return Address
+    right_x = 4.8 * inch # Adjusted for 18pt width
     c.drawString(right_x, height - 1.0 * inch, "Poke Geo")
-    c.drawString(right_x, height - 1.25 * inch, "36 Michael Anthony Ln")
-    c.drawString(right_x, height - 1.50 * inch, "Depew, NY 14043")
+    c.drawString(right_x, height - 1.30 * inch, "36 Michael Anthony Ln")
+    c.drawString(right_x, height - 1.60 * inch, "Depew, NY 14043")
     
-    # Separator Line
+    # Separator Line (Lowered for 18pt text clearance)
     c.setLineWidth(2)
-    c.line(0.5 * inch, height - 1.8 * inch, 7.8 * inch, height - 1.8 * inch)
+    c.line(0.5 * inch, height - 1.9 * inch, 7.8 * inch, height - 1.9 * inch)
     
     # Order Details Section
-    c.setFont("Helvetica", 11); y_pos = height - 2.1 * inch
+    c.setFont("Helvetica", 11); y_pos = height - 2.2 * inch
     c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
     c.drawString(0.5 * inch, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
     c.drawString(0.5 * inch, y_pos - 0.44*inch, f"Buyer Name: {data['buyer_name']}")
