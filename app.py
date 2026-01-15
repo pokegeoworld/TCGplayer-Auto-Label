@@ -45,15 +45,9 @@ st.markdown("""
     }
     
     .glitch-note-red { 
-        color: #FF0000; 
-        font-size: 11px; 
-        font-weight: 900; 
-        text-align: center; 
-        margin-top: 15px; 
-        border: 2px dashed #FF0000; 
-        padding: 8px; 
-        border-radius: 8px; 
-        white-space: nowrap;
+        color: #FF0000; font-size: 11px; font-weight: 900; text-align: center; 
+        margin-top: 15px; border: 2px dashed #FF0000; padding: 8px; 
+        border-radius: 8px; white-space: nowrap;
     }
 
     @media only screen and (max-width: 600px) {
@@ -66,27 +60,31 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (SPLIT HEADER: BUYER LEFT / RETURN RIGHT) ---
+# --- 4. THE DYNAMIC PDF CREATOR (PROPERLY ALIGNED SPLIT HEADER) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
     
-    # 1. Left Side: Buyer Info (22pt)
-    c.setFont("Helvetica-Bold", 22) 
-    c.drawString(0.5 * inch, height - 1.0 * inch, data['buyer_name'])
-    c.drawString(0.5 * inch, height - 1.35 * inch, data['address'])
-    c.drawString(0.5 * inch, height - 1.70 * inch, data['city_state_zip'])
+    # Left Side: Buyer Info (22pt Bold)
+    c.setFont("Helvetica-Bold", 22)
+    left_margin = 0.5 * inch
+    c.drawString(left_margin, height - 1.0 * inch, data['buyer_name'])
+    c.drawString(left_margin, height - 1.35 * inch, data['address'])
+    c.drawString(left_margin, height - 1.70 * inch, data['city_state_zip'])
     
-    # 2. Right Side: Return Address (11pt to fit)
+    # Right Side: Return Address (Aligned to right margin)
     c.setFont("Helvetica", 11)
-    right_x = 4.5 * inch
-    c.drawString(right_x, height - 1.0 * inch, "Poke Geo")
-    c.drawString(right_x, height - 1.20 * inch, "36 Michael Anthony Ln")
-    c.drawString(right_x, height - 1.40 * inch, "Depew, NY 14043")
+    right_margin_x = 5.5 * inch
+    c.drawString(right_margin_x, height - 1.0 * inch, "Poke Geo")
+    c.drawString(right_margin_x, height - 1.20 * inch, "36 Michael Anthony Ln")
+    c.drawString(right_margin_x, height - 1.40 * inch, "Depew, NY 14043")
     
-    c.setLineWidth(2); c.line(0.5 * inch, height - 2.0 * inch, 7.5 * inch, height - 2.0 * inch)
+    # Separator Line
+    c.setLineWidth(2)
+    c.line(0.5 * inch, height - 2.0 * inch, 7.8 * inch, height - 2.0 * inch)
     
+    # Order Details Section
     c.setFont("Helvetica", 11); y_pos = height - 2.3 * inch
     c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
     c.drawString(0.5 * inch, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
@@ -116,6 +114,7 @@ def create_label_pdf(data, items):
     c.setFont("Helvetica-Bold", 11); c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items") 
     c.drawString(5.8 * inch, y_pos, "Grand Total:"); c.drawString(7.2 * inch, y_pos, f"${grand_total:.2f}")
     
+    # Promotional Footer
     y_pos -= 0.35 * inch 
     c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width / 2.0, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
