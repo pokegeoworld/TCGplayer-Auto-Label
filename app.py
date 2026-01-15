@@ -60,7 +60,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (PROPERLY ALIGNED SPLIT HEADER) ---
+# --- 4. THE DYNAMIC PDF CREATOR (STABLE SPLIT HEADER) ---
 def create_label_pdf(data, items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -68,17 +68,17 @@ def create_label_pdf(data, items):
     
     # Left Side: Buyer Info (22pt Bold)
     c.setFont("Helvetica-Bold", 22)
-    left_margin = 0.5 * inch
-    c.drawString(left_margin, height - 1.0 * inch, data['buyer_name'])
-    c.drawString(left_margin, height - 1.35 * inch, data['address'])
-    c.drawString(left_margin, height - 1.70 * inch, data['city_state_zip'])
+    left_x = 0.5 * inch
+    c.drawString(left_x, height - 1.0 * inch, data['buyer_name'])
+    c.drawString(left_x, height - 1.35 * inch, data['address'])
+    c.drawString(left_x, height - 1.70 * inch, data['city_state_zip'])
     
-    # Right Side: Return Address (Aligned to right margin)
+    # Right Side: Return Address (11pt)
     c.setFont("Helvetica", 11)
-    right_margin_x = 5.5 * inch
-    c.drawString(right_margin_x, height - 1.0 * inch, "Poke Geo")
-    c.drawString(right_margin_x, height - 1.20 * inch, "36 Michael Anthony Ln")
-    c.drawString(right_margin_x, height - 1.40 * inch, "Depew, NY 14043")
+    right_x = 5.2 * inch
+    c.drawString(right_x, height - 1.0 * inch, "Poke Geo")
+    c.drawString(right_x, height - 1.20 * inch, "36 Michael Anthony Ln")
+    c.drawString(right_x, height - 1.40 * inch, "Depew, NY 14043")
     
     # Separator Line
     c.setLineWidth(2)
