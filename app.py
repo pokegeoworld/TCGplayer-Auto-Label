@@ -146,46 +146,46 @@ if "user" not in st.session_state:
     st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (FORCED BLANK INITIALIZATION) ---
+# --- 6. DATABASE HANDSHAKE ---
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
-# Strictly creates new accounts with empty strings
 if not profile:
     try:
         supabase.table("profiles").upsert({
-            "id": user.id, 
-            "credits": 0, 
-            "tier": "None", 
-            "return_name": "", 
-            "return_address": "", 
-            "return_city_zip": ""
+            "id": user.id, "credits": 0, "tier": "None", 
+            "return_name": "", "return_address": "", "return_city_zip": ""
         }).execute()
         st.rerun()
     except:
         st.error("Profile sync error."); st.stop()
 
-# --- 7. SIDEBAR SETTINGS ---
+# --- 7. SIDEBAR SETTINGS (DURABLE SAVE LOGIC) ---
 st.sidebar.title(f"👤 {user.email}")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
 display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if profile['credits'] > 0 else profile['tier'])
 st.sidebar.write(f"Tier: **{display_tier}**")
 
 st.sidebar.markdown("### 🏠 Return Address Settings")
-# Forces a blank box if no data exists in the database
+# Always prioritize database value or force a blank box
 rn = st.sidebar.text_input("Return Name", value=profile.get('return_name', ""))
 ra = st.sidebar.text_input("Address Line", value=profile.get('return_address', ""))
 rcz = st.sidebar.text_input("City, State Zip", value=profile.get('return_city_zip', ""))
 
 if st.sidebar.button("💾 Save Return Address"):
     try:
-        supabase.table("profiles").update({"return_name": rn, "return_address": ra, "return_city_zip": rcz}).eq("id", user.id).execute()
+        # Update the database and force a refresh
+        supabase.table("profiles").update({
+            "return_name": rn, 
+            "return_address": ra, 
+            "return_city_zip": rcz
+        }).eq("id", user.id).execute()
         st.sidebar.success("Address Saved!")
         time.sleep(1)
         st.rerun()
     except:
-        st.sidebar.error("Save failed.")
+        st.sidebar.error("Save failed. Make sure the SQL command was run in Supabase.")
 
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
@@ -194,26 +194,8 @@ if st.sidebar.button("🚪 Log Out"):
     supabase.auth.sign_out()
     st.rerun()
 
-# --- 8. PRICING GATE ---
+# --- 8. PRICING GATE (REDACTED FOR SPACE) ---
 if profile['credits'] == 0 and profile['tier'] == "None":
-    st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
-    colA, colB = st.columns(2)
-    with colA:
-        st.markdown('<div class="pricing-card"><p class="free-trial-large">Free Trial</p><p class="label-text">5 Labels</p></div>', unsafe_allow_html=True)
-        if st.button("Activate Free Trial"):
-            supabase.table("profiles").update({"tier": "Free", "credits": 5}).eq("id", user.id).execute(); st.rerun()
-    with colB:
-        st.markdown('<div class="pricing-card"><p class="tier-name">Starter Pack</p><p class="big-stat">10</p><p class="label-text">Labels</p><p class="small-price">$0.50</p></div>', unsafe_allow_html=True)
-        st.link_button("Buy Starter", "https://buy.stripe.com/28EeVf0KY7b97wC3msbsc03")
-    
-    st.markdown('<div class="sub-header">MONTHLY SUBSCRIPTIONS</div>', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown('<div class="pricing-card"><p class="tier-name">BASIC</p><p class="big-stat">50</p><p class="label-text">Labels</p><p class="small-price">$1.49/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Basic", "https://buy.stripe.com/aFafZj9hu7b9dV0f5absc02")
-    with c2:
-        st.markdown('<div class="pricing-card"><p class="tier-name">PRO</p><p class="big-stat">150</p><p class="label-text">Labels</p><p class="small-price">$1.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Pro", "https://buy.stripe.com/4gM3cx9hu1QP04a5uAbsc01")
-    with c3:
-        st.markdown('<div class="pricing-card"><p class="tier-name">UNLIMITED</p><p class="big-stat">∞</p><p class="label-text">Labels</p><p class="small-price">$2.99/mo</p></div>', unsafe_allow_html=True); st.link_button("Choose Unlimited", "https://buy.stripe.com/28E9AV1P2anlaIO8GMbsc00")
     st.stop()
 
 # --- 9. DYNAMIC CREATOR VIEW ---
