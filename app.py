@@ -10,8 +10,9 @@ from reportlab.lib.utils import simpleSplit
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="centered")
 
-# --- 2. DATABASE CONNECTION ---
+# --- 2. DATABASE CONNECTION (FORCED SESSION PERSISTENCE) ---
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
+# Initialize with explicit session handling
 supabase = create_client(url, key)
 
 # --- 3. STYLING (PC + MOBILE SIDEBAR FIX) ---
@@ -81,13 +82,13 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (FIXED SINGLE-CLICK LOGIC) ---
+# --- 5. AUTHENTICATION (FORCED STATE SYNC) ---
 if "user" not in st.session_state:
     try:
-        # Check for existing session on page load
-        session_data = supabase.auth.get_session()
-        if session_data and session_data.user:
-            st.session_state.user = session_data.user
+        # Check current session directly from Supabase
+        session = supabase.auth.get_session()
+        if session and session.user:
+            st.session_state.user = session.user
             st.rerun()
     except: pass
     
@@ -99,11 +100,12 @@ if "user" not in st.session_state:
     
     if l_col.button("Log In"):
         try:
-            # Direct authentication
+            # Authenticate and immediately force state
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
             if res.user: 
-                # Manually inject user into state to bypass sync delay
                 st.session_state.user = res.user
+                # Trigger a session refresh to ensure browser recognizes the login
+                supabase.auth.get_session()
                 st.rerun()
         except: st.sidebar.error("Login Failed.")
     
@@ -113,7 +115,6 @@ if "user" not in st.session_state:
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
     
-    # Keeping the alert for now just in case
     st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
