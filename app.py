@@ -151,7 +151,7 @@ user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
-# Ensures all return address fields are truly blank for new accounts
+# Strictly creates new accounts with empty strings
 if not profile:
     try:
         supabase.table("profiles").upsert({
@@ -173,6 +173,7 @@ display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if pro
 st.sidebar.write(f"Tier: **{display_tier}**")
 
 st.sidebar.markdown("### 🏠 Return Address Settings")
+# Forces a blank box if no data exists in the database
 rn = st.sidebar.text_input("Return Name", value=profile.get('return_name', ""))
 ra = st.sidebar.text_input("Address Line", value=profile.get('return_address', ""))
 rcz = st.sidebar.text_input("City, State Zip", value=profile.get('return_city_zip', ""))
