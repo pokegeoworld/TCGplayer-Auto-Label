@@ -84,9 +84,13 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
 # --- 5. AUTHENTICATION (FIXED SINGLE-CLICK LOGIC) ---
 if "user" not in st.session_state:
     try:
-        session = supabase.auth.get_session()
-        if session and session.user: st.session_state.user = session.user; st.rerun()
+        # Check for existing session on page load
+        session_data = supabase.auth.get_session()
+        if session_data and session_data.user:
+            st.session_state.user = session_data.user
+            st.rerun()
     except: pass
+    
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
     u_email = st.sidebar.text_input("Email")
@@ -95,11 +99,11 @@ if "user" not in st.session_state:
     
     if l_col.button("Log In"):
         try:
-            # Direct sign in attempt
+            # Direct authentication
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
             if res.user: 
+                # Manually inject user into state to bypass sync delay
                 st.session_state.user = res.user
-                time.sleep(0.5) # Brief pause for state sync
                 st.rerun()
         except: st.sidebar.error("Login Failed.")
     
@@ -109,6 +113,7 @@ if "user" not in st.session_state:
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
     
+    # Keeping the alert for now just in case
     st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
