@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING ---
+# --- 3. STYLING (PC + MOBILE SIDEBAR FIX) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -81,7 +81,7 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION ---
+# --- 5. AUTHENTICATION (FIXED SINGLE-CLICK LOGIC) ---
 if "user" not in st.session_state:
     try:
         session = supabase.auth.get_session()
@@ -92,22 +92,28 @@ if "user" not in st.session_state:
     u_email = st.sidebar.text_input("Email")
     u_pass = st.sidebar.text_input("Password", type="password")
     l_col, r_col = st.sidebar.columns(2)
+    
     if l_col.button("Log In"):
         try:
+            # Direct sign in attempt
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if res.user: st.session_state.user = res.user; st.rerun()
+            if res.user: 
+                st.session_state.user = res.user
+                time.sleep(0.5) # Brief pause for state sync
+                st.rerun()
         except: st.sidebar.error("Login Failed.")
+    
     if r_col.button("Sign Up"):
         try:
             supabase.auth.sign_up({"email": u_email, "password": u_pass})
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
+    
     st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (FORCED REFRESH) ---
+# --- 6. DATABASE HANDSHAKE ---
 user = st.session_state.user
-# Always re-fetch the latest data
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
@@ -117,28 +123,25 @@ if not profile:
         st.rerun()
     except: st.error("Profile sync error."); st.stop()
 
-# --- 7. SIDEBAR SETTINGS (DURABLE SAVE LOGIC) ---
+# --- 7. SIDEBAR SETTINGS ---
 st.sidebar.title(f"👤 {user.email}")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
 display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if profile['credits'] > 0 else profile['tier'])
 st.sidebar.write(f"Tier: **{display_tier}**")
 
 st.sidebar.markdown("### 🏠 Return Address Settings")
-# Use current session state or database values
 rn = st.sidebar.text_input("Return Name", value=profile.get('return_name', ""))
 ra = st.sidebar.text_input("Address Line", value=profile.get('return_address', ""))
 rcz = st.sidebar.text_input("City, State Zip", value=profile.get('return_city_zip', ""))
 
 if st.sidebar.button("💾 Save Return Address"):
     try:
-        # Final fix: verify the update executes
         response = supabase.table("profiles").update({"return_name": rn, "return_address": ra, "return_city_zip": rcz}).eq("id", user.id).execute()
         if response.data:
-            st.sidebar.success("Address Saved!"); time.sleep(1); st.rerun()
+            st.sidebar.success("Address Saved!"); time.sleep(0.5); st.rerun()
         else:
-            st.sidebar.error("Update failed: No data returned.")
-    except Exception as e:
-        st.sidebar.error(f"Save failed. Verify SQL columns exist.")
+            st.sidebar.error("Update failed.")
+    except: st.sidebar.error("Save failed. Verify SQL columns exist.")
 
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
