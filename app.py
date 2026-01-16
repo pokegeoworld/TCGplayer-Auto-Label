@@ -14,7 +14,7 @@ st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- 3. STYLING (RETAINED MOBILE + PC FIXES) ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { min-width: 450px !important; max-width: 450px !important; }
@@ -39,7 +39,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. THE DYNAMIC PDF CREATOR (BALANCED 18PT) ---
+# --- 4. PDF GENERATOR ---
 def create_label_pdf(data, items, r_name, r_addr, r_city):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -105,8 +105,9 @@ if "user" not in st.session_state:
     st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE (FORCED BLANK INITIALIZATION) ---
+# --- 6. DATABASE HANDSHAKE (FORCED REFRESH) ---
 user = st.session_state.user
+# Always re-fetch the latest data
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
@@ -123,21 +124,27 @@ display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if pro
 st.sidebar.write(f"Tier: **{display_tier}**")
 
 st.sidebar.markdown("### 🏠 Return Address Settings")
+# Use current session state or database values
 rn = st.sidebar.text_input("Return Name", value=profile.get('return_name', ""))
 ra = st.sidebar.text_input("Address Line", value=profile.get('return_address', ""))
 rcz = st.sidebar.text_input("City, State Zip", value=profile.get('return_city_zip', ""))
 
 if st.sidebar.button("💾 Save Return Address"):
     try:
-        supabase.table("profiles").update({"return_name": rn, "return_address": ra, "return_city_zip": rcz}).eq("id", user.id).execute()
-        st.sidebar.success("Address Saved!"); time.sleep(1); st.rerun()
-    except: st.sidebar.error("Save failed. Run the SQL command in Supabase.")
+        # Final fix: verify the update executes
+        response = supabase.table("profiles").update({"return_name": rn, "return_address": ra, "return_city_zip": rcz}).eq("id", user.id).execute()
+        if response.data:
+            st.sidebar.success("Address Saved!"); time.sleep(1); st.rerun()
+        else:
+            st.sidebar.error("Update failed: No data returned.")
+    except Exception as e:
+        st.sidebar.error(f"Save failed. Verify SQL columns exist.")
 
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
 
-# --- 8. RESTORED PRICING GATE ---
+# --- 8. PRICING GATE ---
 if profile['credits'] == 0 and profile['tier'] == "None":
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
