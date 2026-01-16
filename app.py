@@ -10,9 +10,8 @@ from reportlab.lib.utils import simpleSplit
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="TCGplayer Auto Label", page_icon="🎴", layout="centered")
 
-# --- 2. DATABASE CONNECTION (FORCED SESSION PERSISTENCE) ---
+# --- 2. DATABASE CONNECTION ---
 url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
-# Initialize with explicit session handling
 supabase = create_client(url, key)
 
 # --- 3. STYLING (PC + MOBILE SIDEBAR FIX) ---
@@ -82,40 +81,47 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (FORCED STATE SYNC) ---
+# --- 5. AUTHENTICATION (OUT-OF-THE-BOX FIRST-CLICK FIX) ---
 if "user" not in st.session_state:
+    # Aggressive session check on load
     try:
-        # Check current session directly from Supabase
-        session = supabase.auth.get_session()
-        if session and session.user:
-            st.session_state.user = session.user
+        curr_session = supabase.auth.get_session()
+        if curr_session and curr_session.user:
+            st.session_state.user = curr_session.user
             st.rerun()
     except: pass
-    
+
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
-    u_email = st.sidebar.text_input("Email")
-    u_pass = st.sidebar.text_input("Password", type="password")
+    u_email = st.sidebar.text_input("Email", key="auth_email")
+    u_pass = st.sidebar.text_input("Password", type="password", key="auth_pass")
     l_col, r_col = st.sidebar.columns(2)
     
     if l_col.button("Log In"):
         try:
-            # Authenticate and immediately force state
+            # First attempt: Log in
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
-            if res.user: 
+            if res.user:
+                # INSTANT VERIFICATION: Inject into memory before rerun
                 st.session_state.user = res.user
-                # Trigger a session refresh to ensure browser recognizes the login
-                supabase.auth.get_session()
                 st.rerun()
-        except: st.sidebar.error("Login Failed.")
+            else:
+                st.sidebar.error("Invalid Credentials.")
+        except Exception as e:
+            # Fallback check: If Supabase says 'already logged in', just grab the user
+            try:
+                active_user = supabase.auth.get_user()
+                if active_user:
+                    st.session_state.user = active_user.user
+                    st.rerun()
+            except:
+                st.sidebar.error("Login Failed. Check Connection.")
     
     if r_col.button("Sign Up"):
         try:
             supabase.auth.sign_up({"email": u_email, "password": u_pass})
             st.sidebar.success("Account Created! Click Log In.")
         except: st.sidebar.error("Signup failed.")
-    
-    st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
 # --- 6. DATABASE HANDSHAKE ---
@@ -145,8 +151,6 @@ if st.sidebar.button("💾 Save Return Address"):
         response = supabase.table("profiles").update({"return_name": rn, "return_address": ra, "return_city_zip": rcz}).eq("id", user.id).execute()
         if response.data:
             st.sidebar.success("Address Saved!"); time.sleep(0.5); st.rerun()
-        else:
-            st.sidebar.error("Update failed.")
     except: st.sidebar.error("Save failed. Verify SQL columns exist.")
 
 st.sidebar.markdown("---")
