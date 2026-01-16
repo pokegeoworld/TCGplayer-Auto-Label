@@ -146,12 +146,12 @@ if "user" not in st.session_state:
     st.sidebar.markdown('<p class="glitch-note-red">⚠️ MAY NEED TO CLICK LOG IN TWICE TO SYNC PROFILE</p>', unsafe_allow_html=True)
     st.stop()
 
-# --- 6. DATABASE HANDSHAKE ---
+# --- 6. DATABASE HANDSHAKE (FORCED BLANK INITIALIZATION) ---
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
 
-# Fixed logic: Start new accounts with 0 credits and blank address
+# Ensures all return address fields are truly blank for new accounts
 if not profile:
     try:
         supabase.table("profiles").upsert({
@@ -162,7 +162,7 @@ if not profile:
             "return_address": "", 
             "return_city_zip": ""
         }).execute()
-        st.rerun() # Forces a re-fetch of the blank profile
+        st.rerun()
     except:
         st.error("Profile sync error."); st.stop()
 
@@ -173,7 +173,6 @@ display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if pro
 st.sidebar.write(f"Tier: **{display_tier}**")
 
 st.sidebar.markdown("### 🏠 Return Address Settings")
-# Defaults to blank string if none found
 rn = st.sidebar.text_input("Return Name", value=profile.get('return_name', ""))
 ra = st.sidebar.text_input("Address Line", value=profile.get('return_address', ""))
 rcz = st.sidebar.text_input("City, State Zip", value=profile.get('return_city_zip', ""))
@@ -185,7 +184,7 @@ if st.sidebar.button("💾 Save Return Address"):
         time.sleep(1)
         st.rerun()
     except:
-        st.sidebar.error("Save failed. Check Database columns.")
+        st.sidebar.error("Save failed.")
 
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
@@ -195,7 +194,6 @@ if st.sidebar.button("🚪 Log Out"):
     st.rerun()
 
 # --- 8. PRICING GATE ---
-# Shows options correctly if credits are zero and tier is "None"
 if profile['credits'] == 0 and profile['tier'] == "None":
     st.markdown('<p class="hero-title">Choose Your Plan</p>', unsafe_allow_html=True)
     colA, colB = st.columns(2)
