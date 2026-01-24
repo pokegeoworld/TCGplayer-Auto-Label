@@ -39,7 +39,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. PDF GENERATOR (WITH TOTALS SUMMARY) ---
+# --- 4. PDF GENERATOR (REORGANIZED DETAILS SECTION) ---
 def create_label_pdf(data, items, r_name, r_addr, r_city):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -49,18 +49,26 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     c.drawString(left_x, height - 1.0 * inch, data['buyer_name'])
     c.drawString(left_x, height - 1.30 * inch, data['address'])
     c.drawString(left_x, height - 1.60 * inch, data['city_state_zip'])
-    right_x = 4.8 * inch
-    c.drawString(right_x, height - 1.0 * inch, r_name)
-    c.drawString(right_x, height - 1.30 * inch, r_addr)
-    c.drawString(right_x, height - 1.60 * inch, r_city)
+    right_header_x = 4.8 * inch
+    c.drawString(right_header_x, height - 1.0 * inch, r_name)
+    c.drawString(right_header_x, height - 1.30 * inch, r_addr)
+    c.drawString(right_header_x, height - 1.60 * inch, r_city)
     c.setLineWidth(2); c.line(0.5 * inch, height - 1.9 * inch, 7.8 * inch, height - 1.9 * inch)
+    
+    # --- REORGANIZED DETAILS SECTION ---
     c.setFont("Helvetica", 11); y_pos = height - 2.2 * inch
-    c.drawString(0.5 * inch, y_pos, f"Order Date: {data['date']}")
-    c.drawString(0.5 * inch, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
-    c.drawString(0.5 * inch, y_pos - 0.44*inch, f"Buyer Name: {data['buyer_name']}")
-    c.drawString(0.5 * inch, y_pos - 0.66*inch, f"Seller Name: {r_name}")
-    c.drawString(0.5 * inch, y_pos - 0.88*inch, f"Order Number: {data['order_no']}")
-    y_pos -= 1.3 * inch; c.setFont("Helvetica-Bold", 12)
+    right_col_x = 4.8 * inch
+    
+    # Left Column
+    c.drawString(left_x, y_pos, f"Buyer Name: {data['buyer_name']}")
+    c.drawString(left_x, y_pos - 0.22*inch, f"Seller Name: {r_name}")
+    c.drawString(left_x, y_pos - 0.44*inch, f"Order Number: {data['order_no']}")
+    
+    # Right Column
+    c.drawString(right_col_x, y_pos, f"Order Date: {data['date']}")
+    c.drawString(right_col_x, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
+    
+    y_pos -= 0.85 * inch; c.setFont("Helvetica-Bold", 12)
     c.drawString(0.5 * inch, y_pos, "Qty"); c.drawString(1.0 * inch, y_pos, "Description")
     c.drawString(6.6 * inch, y_pos, "Price"); c.drawString(7.2 * inch, y_pos, "Total")
     y_pos -= 0.1 * inch; c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos); y_pos -= 0.25 * inch
@@ -70,7 +78,7 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     for item in items:
         wrapped_lines = simpleSplit(item['desc'], font_name, font_size, 5.3 * inch)
         needed_space = len(wrapped_lines) * 0.18 * inch
-        if y_pos - needed_space < 1.2 * inch: # Adjusted for summary space
+        if y_pos - needed_space < 1.2 * inch:
             c.showPage(); y_pos = height - 0.5 * inch; c.setFont(font_name, font_size)
         c.drawString(0.5 * inch, y_pos, item['qty'])
         c.drawString(6.6 * inch, y_pos, item['price']); c.drawString(7.2 * inch, y_pos, item['total'])
@@ -78,20 +86,19 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
             c.drawString(1.0 * inch, y_pos, line); y_pos -= 0.18 * inch
         total_qty += int(item['qty']); grand_total += float(item['total'].replace('$', '').replace(',', '')); y_pos -= 0.07 * inch
     
-    # --- ADDED TOTALS SUMMARY SECTION ---
     y_pos -= 0.1 * inch
     c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos)
     y_pos -= 0.25 * inch
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(0.5 * inch, y_pos, f"Total Items: {total_qty}")
-    c.drawRightString(7.8 * inch, y_pos, f"Order Grand Total: ${grand_total:,.2f}")
+    c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items")
+    c.drawRightString(7.8 * inch, y_pos, f"Total: ${grand_total:,.2f}")
     
     y_pos -= 0.45 * inch; c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width / 2.0, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (RETAINED MASTER FIRST-CLICK FIX) ---
+# --- 5. AUTHENTICATION (MASTER BYPASS LOGIC) ---
 if "user" not in st.session_state:
     try:
         curr_session = supabase.auth.get_session()
@@ -99,13 +106,11 @@ if "user" not in st.session_state:
             st.session_state.user = curr_session.user
             st.rerun()
     except: pass
-
     st.markdown('<p class="hero-title">TCGplayer Auto Label Creator</p>', unsafe_allow_html=True)
     st.sidebar.title("Login / Register")
     u_email = st.sidebar.text_input("Email", key="auth_email")
     u_pass = st.sidebar.text_input("Password", type="password", key="auth_pass")
     l_col, r_col = st.sidebar.columns(2)
-    
     if l_col.button("Log In"):
         try:
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
@@ -122,7 +127,6 @@ if "user" not in st.session_state:
                     st.rerun()
             except:
                 st.sidebar.error("Login Failed. Check Connection.")
-    
     if r_col.button("Sign Up"):
         try:
             supabase.auth.sign_up({"email": u_email, "password": u_pass})
@@ -134,7 +138,6 @@ if "user" not in st.session_state:
 user = st.session_state.user
 profile_res = supabase.table("profiles").select("*").eq("id", user.id).execute()
 profile = profile_res.data[0] if profile_res.data else None
-
 if not profile:
     try:
         supabase.table("profiles").upsert({"id": user.id, "credits": 0, "tier": "None", "return_name": "", "return_address": "", "return_city_zip": ""}).execute()
@@ -146,19 +149,16 @@ st.sidebar.title(f"👤 {user.email}")
 st.sidebar.write(f"Credits: **{profile['credits']}**")
 display_tier = profile['tier'] if profile['tier'] == "VIP" else ('Active' if profile['credits'] > 0 else profile['tier'])
 st.sidebar.write(f"Tier: **{display_tier}**")
-
 st.sidebar.markdown("### 🏠 Return Address Settings")
 rn = st.sidebar.text_input("Return Name", value=profile.get('return_name', ""))
 ra = st.sidebar.text_input("Address Line", value=profile.get('return_address', ""))
 rcz = st.sidebar.text_input("City, State Zip", value=profile.get('return_city_zip', ""))
-
 if st.sidebar.button("💾 Save Return Address"):
     try:
         response = supabase.table("profiles").update({"return_name": rn, "return_address": ra, "return_city_zip": rcz}).eq("id", user.id).execute()
         if response.data:
             st.sidebar.success("Address Saved!"); time.sleep(0.5); st.rerun()
     except: st.sidebar.error("Save failed. Verify SQL columns exist.")
-
 st.sidebar.markdown("---")
 st.sidebar.link_button("⚙️ Account Settings", "https://billing.stripe.com/p/login/28E9AV1P2anlaIO8GMbsc00")
 if st.sidebar.button("🚪 Log Out"): st.session_state.clear(); supabase.auth.sign_out(); st.rerun()
