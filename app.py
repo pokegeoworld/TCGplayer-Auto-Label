@@ -39,7 +39,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. PDF GENERATOR ---
+# --- 4. PDF GENERATOR (WITH TOTALS SUMMARY) ---
 def create_label_pdf(data, items, r_name, r_addr, r_city):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -64,26 +64,35 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     c.drawString(0.5 * inch, y_pos, "Qty"); c.drawString(1.0 * inch, y_pos, "Description")
     c.drawString(6.6 * inch, y_pos, "Price"); c.drawString(7.2 * inch, y_pos, "Total")
     y_pos -= 0.1 * inch; c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos); y_pos -= 0.25 * inch
+    
     font_name, font_size = "Helvetica", 9.5; c.setFont(font_name, font_size)
     total_qty, grand_total = 0, 0.0
     for item in items:
         wrapped_lines = simpleSplit(item['desc'], font_name, font_size, 5.3 * inch)
         needed_space = len(wrapped_lines) * 0.18 * inch
-        if y_pos - needed_space < 1.0 * inch:
+        if y_pos - needed_space < 1.2 * inch: # Adjusted for summary space
             c.showPage(); y_pos = height - 0.5 * inch; c.setFont(font_name, font_size)
         c.drawString(0.5 * inch, y_pos, item['qty'])
         c.drawString(6.6 * inch, y_pos, item['price']); c.drawString(7.2 * inch, y_pos, item['total'])
         for line in wrapped_lines:
             c.drawString(1.0 * inch, y_pos, line); y_pos -= 0.18 * inch
         total_qty += int(item['qty']); grand_total += float(item['total'].replace('$', '').replace(',', '')); y_pos -= 0.07 * inch
-    y_pos -= 0.35 * inch; c.setFont("Helvetica-Bold", 14)
+    
+    # --- ADDED TOTALS SUMMARY SECTION ---
+    y_pos -= 0.1 * inch
+    c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos)
+    y_pos -= 0.25 * inch
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(0.5 * inch, y_pos, f"Total Items: {total_qty}")
+    c.drawRightString(7.8 * inch, y_pos, f"Order Grand Total: ${grand_total:,.2f}")
+    
+    y_pos -= 0.45 * inch; c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width / 2.0, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
     c.save(); packet.seek(0)
     return packet.getvalue()
 
-# --- 5. AUTHENTICATION (OUT-OF-THE-BOX FIRST-CLICK FIX) ---
+# --- 5. AUTHENTICATION (RETAINED MASTER FIRST-CLICK FIX) ---
 if "user" not in st.session_state:
-    # Aggressive session check on load
     try:
         curr_session = supabase.auth.get_session()
         if curr_session and curr_session.user:
@@ -99,16 +108,13 @@ if "user" not in st.session_state:
     
     if l_col.button("Log In"):
         try:
-            # First attempt: Log in
             res = supabase.auth.sign_in_with_password({"email": u_email, "password": u_pass})
             if res.user:
-                # INSTANT VERIFICATION: Inject into memory before rerun
                 st.session_state.user = res.user
                 st.rerun()
             else:
                 st.sidebar.error("Invalid Credentials.")
         except Exception as e:
-            # Fallback check: If Supabase says 'already logged in', just grab the user
             try:
                 active_user = supabase.auth.get_user()
                 if active_user:
