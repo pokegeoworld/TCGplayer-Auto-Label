@@ -39,7 +39,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. PDF GENERATOR (UNIFIED FONT SIZES) ---
+# --- 4. PDF GENERATOR (CONSERVED VERTICAL SPACE) ---
 def create_label_pdf(data, items, r_name, r_addr, r_city):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -63,20 +63,20 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     
     c.setLineWidth(2); c.line(0.5 * inch, height - 2.1 * inch, 7.8 * inch, height - 2.1 * inch)
     
-    # UNIFIED FONT SIZE (11.5) FOR ALL DETAILS
-    y_pos = height - 2.45 * inch
+    # CONSERVED SPACE FOR DETAILS SECTION
+    y_pos = height - 2.35 * inch
     right_col_x = 4.5 * inch
     c.setFont("Helvetica", 11.5)
     
     # Left Column
     c.drawString(left_x, y_pos, f"Buyer Name: {data['buyer_name']}")
-    c.drawString(left_x, y_pos - 0.25*inch, f"Seller Name: {r_name}")
+    c.drawString(left_x, y_pos - 0.22*inch, f"Seller Name: {r_name}")
     
     # Right Column
     c.drawString(right_col_x, y_pos, f"Order Date: {data['date']}")
-    c.drawString(right_col_x, y_pos - 0.25*inch, f"Order Number: {data['order_no']}")
+    c.drawString(right_col_x, y_pos - 0.22*inch, f"Order Number: {data['order_no']}")
     
-    y_pos -= 0.85 * inch; c.setFont("Helvetica-Bold", 12)
+    y_pos -= 0.65 * inch; c.setFont("Helvetica-Bold", 12)
     c.drawString(0.5 * inch, y_pos, "Qty"); c.drawString(1.0 * inch, y_pos, "Description")
     c.drawString(6.6 * inch, y_pos, "Price"); c.drawString(7.2 * inch, y_pos, "Total")
     y_pos -= 0.1 * inch; c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos); y_pos -= 0.25 * inch
