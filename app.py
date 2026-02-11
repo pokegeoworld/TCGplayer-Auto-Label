@@ -39,7 +39,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. PDF GENERATOR (UPDATED DETAILS LAYOUT) ---
+# --- 4. PDF GENERATOR (UNIFIED FONT SIZES) ---
 def create_label_pdf(data, items, r_name, r_addr, r_city):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -63,17 +63,16 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     
     c.setLineWidth(2); c.line(0.5 * inch, height - 2.1 * inch, 7.8 * inch, height - 2.1 * inch)
     
-    # ADJUSTED DETAILS FONT AND STACKED RIGHT COLUMN
+    # UNIFIED FONT SIZE (11.5) FOR ALL DETAILS
     y_pos = height - 2.45 * inch
     right_col_x = 4.5 * inch
-    
-    # Left Column (Larger Font)
-    c.setFont("Helvetica", 13)
-    c.drawString(left_x, y_pos, f"Buyer Name: {data['buyer_name']}")
-    c.drawString(left_x, y_pos - 0.28*inch, f"Seller Name: {r_name}")
-    
-    # Right Column (Incrementally Smaller Font, Stacked)
     c.setFont("Helvetica", 11.5)
+    
+    # Left Column
+    c.drawString(left_x, y_pos, f"Buyer Name: {data['buyer_name']}")
+    c.drawString(left_x, y_pos - 0.25*inch, f"Seller Name: {r_name}")
+    
+    # Right Column
     c.drawString(right_col_x, y_pos, f"Order Date: {data['date']}")
     c.drawString(right_col_x, y_pos - 0.25*inch, f"Order Number: {data['order_no']}")
     
