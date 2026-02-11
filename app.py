@@ -39,32 +39,34 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. PDF GENERATOR (REORGANIZED DETAILS SECTION) ---
+# --- 4. PDF GENERATOR ---
 def create_label_pdf(data, items, r_name, r_addr, r_city):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
     width, height = letter
     c.setFont("Helvetica-Bold", 18)
     left_x = 0.5 * inch
-    c.drawString(left_x, height - 1.0 * inch, data['buyer_name'])
-    c.drawString(left_x, height - 1.30 * inch, data['address'])
-    c.drawString(left_x, height - 1.60 * inch, data['city_state_zip'])
+    
+    y_addr = height - 1.0 * inch
+    c.drawString(left_x, y_addr, data['buyer_name'])
+    c.drawString(left_x, y_addr - 0.30 * inch, data['address_1'])
+    if data.get('address_2'):
+        c.drawString(left_x, y_addr - 0.60 * inch, data['address_2'])
+        c.drawString(left_x, y_addr - 0.90 * inch, data['city_state_zip'])
+    else:
+        c.drawString(left_x, y_addr - 0.60 * inch, data['city_state_zip'])
+        
     right_header_x = 4.8 * inch
     c.drawString(right_header_x, height - 1.0 * inch, r_name)
     c.drawString(right_header_x, height - 1.30 * inch, r_addr)
     c.drawString(right_header_x, height - 1.60 * inch, r_city)
     c.setLineWidth(2); c.line(0.5 * inch, height - 1.9 * inch, 7.8 * inch, height - 1.9 * inch)
     
-    # --- REORGANIZED DETAILS SECTION ---
     c.setFont("Helvetica", 11); y_pos = height - 2.2 * inch
     right_col_x = 4.8 * inch
-    
-    # Left Column
     c.drawString(left_x, y_pos, f"Buyer Name: {data['buyer_name']}")
     c.drawString(left_x, y_pos - 0.22*inch, f"Seller Name: {r_name}")
     c.drawString(left_x, y_pos - 0.44*inch, f"Order Number: {data['order_no']}")
-    
-    # Right Column
     c.drawString(right_col_x, y_pos, f"Order Date: {data['date']}")
     c.drawString(right_col_x, y_pos - 0.22*inch, "Shipping Method: Standard (7-10 days)")
     
@@ -86,15 +88,14 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
             c.drawString(1.0 * inch, y_pos, line); y_pos -= 0.18 * inch
         total_qty += int(item['qty']); grand_total += float(item['total'].replace('$', '').replace(',', '')); y_pos -= 0.07 * inch
     
-    y_pos -= 0.1 * inch
-    c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos)
-    y_pos -= 0.25 * inch
-    c.setFont("Helvetica-Bold", 11)
+    y_pos -= 0.1 * inch; c.setLineWidth(1); c.line(0.5 * inch, y_pos, 7.8 * inch, y_pos)
+    y_pos -= 0.25 * inch; c.setFont("Helvetica-Bold", 11)
     c.drawString(0.5 * inch, y_pos, f"{total_qty} Total Items")
     c.drawRightString(7.8 * inch, y_pos, f"Total: ${grand_total:,.2f}")
     
     y_pos -= 0.45 * inch; c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(width / 2.0, y_pos, "Try TCGplayer Auto Label for FREE at tcgplayerautolabel.streamlit.app")
+    # UPDATED PROMO LINE 
+    c.drawCentredString(width / 2.0, y_pos, "Be sure to check us out at ThePokeGeo on eBay and TCGplayer, thank you!")
     c.save(); packet.seek(0)
     return packet.getvalue()
 
@@ -191,7 +192,19 @@ if uploaded_file:
         order_no = re.search(r"Order Number:\s*([A-Z0-9\-]+)", text).group(1)
         order_date = re.search(r"(\d{2}/\d{2}/\d{4})", text).group(1)
         ship_idx = next(i for i, line in enumerate(lines) if "Ship To:" in line or "Shipping Address:" in line)
-        data = {'buyer_name': lines[ship_idx + 1], 'address': lines[ship_idx + 2], 'city_state_zip': lines[ship_idx + 3], 'date': order_date, 'order_no': order_no}
+        
+        address_info = {'buyer_name': lines[ship_idx + 1], 'address_1': lines[ship_idx + 2]}
+        zip_pattern = r".*,\s*[A-Z]{2}\s+\d{5}"
+        
+        if re.match(zip_pattern, lines[ship_idx + 3]):
+            address_info['city_state_zip'] = lines[ship_idx + 3]
+            address_info['address_2'] = None
+        else:
+            address_info['address_2'] = lines[ship_idx + 3]
+            address_info['city_state_zip'] = lines[ship_idx + 4]
+            
+        data = {**address_info, 'date': order_date, 'order_no': order_no}
+        
         items = []
         item_rows = re.findall(r"(\d+)\s+(Pokemon.*?)\s+\$(\d+\.\d{2})\s+\$(\d+\.\d{2})", text, re.DOTALL)
         for qty, desc, price, total in item_rows: items.append({'qty': qty, 'desc': desc.replace('\n', ' ').strip(), 'price': f"${price}", 'total': f"${total}"})
