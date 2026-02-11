@@ -39,7 +39,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. PDF GENERATOR ---
+# --- 4. PDF GENERATOR (UPDATED DETAILS LAYOUT) ---
 def create_label_pdf(data, items, r_name, r_addr, r_city):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
@@ -63,17 +63,19 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     
     c.setLineWidth(2); c.line(0.5 * inch, height - 2.1 * inch, 7.8 * inch, height - 2.1 * inch)
     
-    # REORGANIZED DETAILS WITH LARGER FONT
-    c.setFont("Helvetica", 13); y_pos = height - 2.45 * inch
+    # ADJUSTED DETAILS FONT AND STACKED RIGHT COLUMN
+    y_pos = height - 2.45 * inch
     right_col_x = 4.5 * inch
     
-    # Left Column Details
+    # Left Column (Larger Font)
+    c.setFont("Helvetica", 13)
     c.drawString(left_x, y_pos, f"Buyer Name: {data['buyer_name']}")
     c.drawString(left_x, y_pos - 0.28*inch, f"Seller Name: {r_name}")
     
-    # Right Column Details (No Shipping Method)
-    c.drawString(right_col_x, y_pos, f"Order Number: {data['order_no']}")
-    c.drawString(right_col_x, y_pos - 0.28*inch, f"Order Date: {data['date']}")
+    # Right Column (Incrementally Smaller Font, Stacked)
+    c.setFont("Helvetica", 11.5)
+    c.drawString(right_col_x, y_pos, f"Order Date: {data['date']}")
+    c.drawString(right_col_x, y_pos - 0.25*inch, f"Order Number: {data['order_no']}")
     
     y_pos -= 0.85 * inch; c.setFont("Helvetica-Bold", 12)
     c.drawString(0.5 * inch, y_pos, "Qty"); c.drawString(1.0 * inch, y_pos, "Description")
