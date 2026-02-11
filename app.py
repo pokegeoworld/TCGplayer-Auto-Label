@@ -60,9 +60,11 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     c.drawString(right_header_x, height - 1.0 * inch, r_name)
     c.drawString(right_header_x, height - 1.30 * inch, r_addr)
     c.drawString(right_header_x, height - 1.60 * inch, r_city)
-    c.setLineWidth(2); c.line(0.5 * inch, height - 1.9 * inch, 7.8 * inch, height - 1.9 * inch)
     
-    c.setFont("Helvetica", 11); y_pos = height - 2.2 * inch
+    # LOWERED BLACK LINE FOR SPACE 
+    c.setLineWidth(2); c.line(0.5 * inch, height - 2.1 * inch, 7.8 * inch, height - 2.1 * inch)
+    
+    c.setFont("Helvetica", 11); y_pos = height - 2.4 * inch
     right_col_x = 4.8 * inch
     c.drawString(left_x, y_pos, f"Buyer Name: {data['buyer_name']}")
     c.drawString(left_x, y_pos - 0.22*inch, f"Seller Name: {r_name}")
@@ -94,7 +96,6 @@ def create_label_pdf(data, items, r_name, r_addr, r_city):
     c.drawRightString(7.8 * inch, y_pos, f"Total: ${grand_total:,.2f}")
     
     y_pos -= 0.45 * inch; c.setFont("Helvetica-Bold", 14)
-    # UPDATED PROMO LINE 
     c.drawCentredString(width / 2.0, y_pos, "Be sure to check us out at ThePokeGeo on eBay and TCGplayer, thank you!")
     c.save(); packet.seek(0)
     return packet.getvalue()
